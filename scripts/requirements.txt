@@ -1,0 +1,2 @@
+influxdb>5.2
+pymongo>3.7

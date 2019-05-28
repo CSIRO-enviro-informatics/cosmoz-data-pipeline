@@ -1,0 +1,69 @@
+version: "3"
+services:
+
+  timeseriesdb:
+    image: influxdb:1.7-alpine
+    ports:
+      - "8186:8086"
+      - "8188:8088"
+    networks:
+      - backend
+    volumes:
+      # The /var/lib/influxdb dir has subdirs {data, meta, wal} all need to be persisted.
+      - timeseriesdb-data:/var/lib/influxdb
+      - "./influxdb.conf:/etc/influxdb/influxdb.conf"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    environment:
+      - INFLUX_DB=cosmoz
+    command: ["influxd", "-config", "/etc/influxdb/influxdb.conf"]
+  
+  documentdb:
+    image: mvertes/alpine-mongo:latest
+    ports:
+      - "27018:27017"
+      - "28017"
+    volumes:
+      - documentdb-data:/data/db
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    environment:
+      - MONGODB_RUN="/var/run/mongodb"
+      - MONGODB_DATA="/var/lib/mongodb"
+      - MONGODB_USER="mongodb"
+      - MONGODB_IP="0.0.0.0"
+      - MONGODB_OPTIONS="--journal"
+
+  
+  visualizer:
+    image: chronograf:1.7-alpine
+    depends_on:
+      - timeseriesdb 
+    ports:
+      - "8888:8888"
+    networks:
+      - backend
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    command: ["chronograf", "--influxdb-url=http://timeseriesdb:8086"]
+
+networks:
+  backend:
+      
+volumes:
+#  timeseriesdb-data:
+#  documentdb-data:
+  timeseriesdb-data:
+    driver_opts:
+      type: none
+      device: "${PWD}/tsdb"
+      o: bind
+  documentdb-data:
+    driver_opts:
+      type: none
+      device: "${PWD}/mgdb"
+      o: bind

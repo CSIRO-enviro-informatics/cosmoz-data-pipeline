@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
+    <data-source source="LOCAL" name="SQL1-TSV" uuid="c8b88cca-17ee-461c-b9f0-ae39cd086c8e">
+      <driver-ref>sqlserver.ms</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>com.microsoft.sqlserver.jdbc.SQLServerDriver</jdbc-driver>
+      <jdbc-url>jdbc:sqlserver://sql1-tsv.nexus.csiro.au:1433;database=CosmOz</jdbc-url>
+      <driver-properties>
+        <property name="applicationName" value="jTDS" />
+        <property name="appName" value="DataGrip" />
+        <property name="PACKETSIZE" value="4096" />
+        <property name="DOMAIN" value="nexus.csiro.au" />
+        <property name="trustServerCertificate" value="true" />
+        <property name="USENTLMV2" value="true" />
+        <property name="SENDSTRINGPARAMETERSASUNICODE" value="false" />
+        <property name="authentication" value="ActiveDirectoryIntegrated" />
+        <property name="packetSize" value="4096" />
+      </driver-properties>
+    </data-source>
+  </component>
+</project>

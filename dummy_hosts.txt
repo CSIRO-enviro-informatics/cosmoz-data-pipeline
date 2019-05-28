@@ -1,0 +1,4 @@
+127.0.0.1       localhost
+127.0.1.1       local.cosmoz.csiro.au      local
+10.22.0.75   t2.cosmoz.csiro.au      t2
+10.22.0.74   t1.cosmoz.csiro.au      t1
