@@ -5,3 +5,4 @@ scripts/_sql_db_config.py
 scripts/venv/
 *.wt
 *.lock
+scripts/*.csv
