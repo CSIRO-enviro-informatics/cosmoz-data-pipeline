@@ -15,43 +15,25 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-from datetime import datetime, timedelta, date
+import argparse
+import sys
+from datetime import datetime, timedelta, date, timezone
 from sql_db import CosmozSQLConnection
 from influxdb import InfluxDBClient
 from influx_cached_writer import AccumCacheInfluxWriter
+from _influx_db_config import consts as influx_config
+from utils import datetime_to_sql, isostring_to_datetime, datetime_to_isostring, sql_to_isostring
 
-influx_client = InfluxDBClient('localhost', 8186, 'root', 'root', 'cosmoz', timeout=30)
-def sql_to_isostring(sql_datetime):
-    timestamp_parts = str(sql_datetime).split(' ')
-    return "{}T{}Z".format(timestamp_parts[0], timestamp_parts[1])
-
-def datetime_to_isostring(py_datetime):
-    """
-    :param py_datetime:
-    :type py_datetime: datetime
-    :return: the iso string representation
-    :rtype: str
-    """
-    if isinstance(py_datetime, date) and not isinstance(py_datetime, datetime):
-        return py_datetime.strftime("%Y-%m-%dT00:00:00Z")
-    if hasattr(py_datetime, 'microsecond') and py_datetime.microsecond > 0:
-        return py_datetime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    return py_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-def datetime_to_sql(py_datetime):
-    """
-
-    :param py_datetime:
-    :type py_datetime: datetime
-    :return: the sql string representation
-    :rtype: str
-    """
-    return py_datetime.strftime("%Y-%m-%d %H:%M:%S")
+influx_client = InfluxDBClient(
+    influx_config['DB_HOST'], influx_config['DB_PORT'],
+    influx_config['DB_USERNAME'], influx_config['DB_PASSWORD'],
+    influx_config['DB_NAME'], timeout=30)
 
 
-def intensities():
-    from_time = datetime.min
-    #from_time = datetime.utcnow() - timedelta(days=120)
+def intensities(from_time=None):
+    if from_time is None:
+        from_time = datetime.min
+    #from_time = datetime.now().astimezone(timezone.utc) - timedelta(days=120)
     from_time_sql = datetime_to_sql(from_time)
     con1 = CosmozSQLConnection()
     with con1 as conn:
@@ -89,208 +71,57 @@ def intensities():
                     del row
 
 
-def silo_data():
-    with open("./silo.csv", "r", encoding="utf-8") as f:
-        r = csv.reader(f, delimiter="\t")
-        headers = next(r)
-        with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
-            while True:
-                try:
-                    row = next(r)
-                except (IndexError, StopIteration):
-                    break
-                print(row)
-                row_dict = {}
-                site_num = int(row[0])
-                for ci, cval in enumerate(row):
-                    col_name = headers[ci]
-                    row_dict[col_name] = cval
-                iso_timestamp = sql_to_isostring(row_dict['Date2'])
-                json_body = {
-                        "measurement": "silo_data",
-                        "tags": {
-                            "site_no": site_num,
-                        },
-                        "time": iso_timestamp, #"2009-11-10T23:00:00Z",
-                        "fields": {
-                            "t_max": float(row_dict['T_Max']),
-                            "smx": float(row_dict['Smx']),
-                            "t_min": float(row_dict['T_Min']),
-                            "smn": float(row_dict['Smn']),
-                            "rain": float(row_dict['Rain']),
-                            "srn": float(row_dict['Srn']),
-                            "evap": float(row_dict['Evap']),
-                            "sev": float(row_dict['Sev']),
-                            "radn": float(row_dict['Radn']),
-                            "ssl": float(row_dict['Ssl']),
-                            "vp": float(row_dict['VP']),
-                            "svp": float(row_dict['Svp']),
-                            "rh_max_t": float(row_dict['RHmaxT']),
-                            "rh_min_t": float(row_dict['RHminT']),
-                            "average_temperature": float(row_dict['AverageTemperature']),
-                            "average_humidity": float(row_dict['AverageHumidity'])
+def silo_data(from_time=None):
+    if from_time is None:
+        from_time = datetime.min
+    from_time_sql = datetime_to_sql(from_time)
+    con1 = CosmozSQLConnection()
+    with con1 as conn:
+        with conn.cursor(as_dict=True) as cur:
+            sql = "SELECT * FROM dbo.SiloData WHERE Date2 >= %s;"
+            cur.execute(sql, from_time_sql)
+            with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
+                while True:
+                    try:
+                        row = cur.fetchone()
+                    except (IndexError, StopIteration):
+                        break
+                    if row is None or row is False:
+                        break
+                    #print(row)
+                    site_num = int(row['SiteNo'])
+                    iso_timestamp = datetime_to_isostring(row['Date2'])
+                    json_body = {
+                            "measurement": "silo_data",
+                            "tags": {
+                                "site_no": site_num,
+                            },
+                            "time": iso_timestamp, #"2009-11-10T23:00:00Z",
+                            "fields": {
+                                "t_max": float(row['T_Max']),
+                                "smx": float(row['Smx']),
+                                "t_min": float(row['T_Min']),
+                                "smn": float(row['Smn']),
+                                "rain": float(row['Rain']),
+                                "srn": float(row['Srn']),
+                                "evap": float(row['Evap']),
+                                "sev": float(row['Sev']),
+                                "radn": float(row['Radn']),
+                                "ssl": float(row['Ssl']),
+                                "vp": float(row['VP']),
+                                "svp": float(row['Svp']),
+                                "rh_max_t": float(row['RHmaxT']),
+                                "rh_min_t": float(row['RHminT']),
+                                "average_temperature": float(row['AverageTemperature']),
+                                "average_humidity": float(row['AverageHumidity'])
+                            }
                         }
-                    }
-                writer.write_point(json_body)
+                    writer.write_point(json_body)
 
 
-def level1():
-    with open("./level1.csv", "r", encoding="utf-8") as f:
-        r = csv.reader(f, delimiter="\t")
-        headers = next(r)
-        with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
-            while True:
-                try:
-                    row = next(r)
-                except (IndexError, StopIteration):
-                    break
-                print(row)
-                row_dict = {}
-                site_num = int(row[0])
-                for ci, cval in enumerate(row):
-                    col_name = headers[ci]
-                    row_dict[col_name] = cval
-                iso_timestamp = sql_to_isostring(row_dict['Timestamp'])
-                json_body = {
-                        "measurement": "level1",
-                        "tags": {
-                            "site_no": site_num,
-                            "flag": int(row_dict['Flag']),
-                        },
-                        "time": iso_timestamp, #"2009-11-10T23:00:00Z",
-                        "fields": {
-                            "count": float(row_dict['Count']),
-                            "pressure1": float(row_dict['Pressure1']),
-                            "internal_temperature": float(row_dict['InternalTemperature']),
-                            "internal_humidity": float(row_dict['InternalHumidity']),
-                            "battery": float(row_dict['Battery']),
-                            "tube_temperature": float(row_dict['TubeTemperature']),
-                            "tube_humidity": float(row_dict['TubeHumidity']),
-                            "rain": float(row_dict['Rain']),
-                            "vwc1": float(row_dict['VWC1']),
-                            "vwc2": float(row_dict['VWC2']),
-                            "vwc3": float(row_dict['VWC3']),
-                            "pressure2": float(row_dict['Pressure2']),
-                            "external_temperature": float(row_dict['ExternalTemperature']),
-                            "external_humidity": float(row_dict['ExternalHumidity']),
-                        }
-                    }
-                writer.write_point(json_body)
-
-
-def level2():
-    with open("./level2.csv", "r", encoding="utf-8") as f:
-        r = csv.reader(f, delimiter="\t")
-        headers = next(r)
-        with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
-            while True:
-                try:
-                    row = next(r)
-                except (IndexError, StopIteration):
-                    break
-                print(row)
-                row_dict = {}
-                site_num = int(row[0])
-                for ci, cval in enumerate(row):
-                    col_name = headers[ci]
-                    row_dict[col_name] = cval
-                iso_timestamp = sql_to_isostring(row_dict['Timestamp'])
-                json_body = {
-                        "measurement": "level2",
-                        "tags": {
-                            "site_no": site_num,
-                            "flag": int(row_dict['Flag']),
-                        },
-                        "time": iso_timestamp, #"2009-11-10T23:00:00Z",
-                        "fields": {
-                            "count": float(row_dict['Count']),
-                            "press_corr": float(row_dict['PressCorr']),
-                            "wv_corr": float(row_dict['WVCorr']),
-                            "intensity_corr": float(row_dict['IntensityCorr']),
-                            "corr_count": float(row_dict['CorrCount'])
-                        }
-                    }
-                writer.write_point(json_body)
-
-
-def level3():
-    with open("./level3.csv", "r", encoding="utf-8") as f:
-        r = csv.reader(f, delimiter="\t")
-        headers = next(r)
-        with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
-            while True:
-                try:
-                    row = next(r)
-                except (IndexError, StopIteration):
-                    break
-                print(row)
-                row_dict = {}
-                site_num = int(row[0])
-                for ci, cval in enumerate(row):
-                    col_name = headers[ci]
-                    row_dict[col_name] = cval
-                iso_timestamp = sql_to_isostring(row_dict['Timestamp'])
-                json_body = {
-                        "measurement": "level3",
-                        "tags": {
-                            "site_no": site_num,
-                            "flag": int(row_dict['Flag']),
-                        },
-                        "time": iso_timestamp, #"2009-11-10T23:00:00Z",
-                        "fields": {
-                            "soil_moist": float(row_dict['SoilMoist']),
-                            "effective_depth": float(row_dict['EffectiveDepth']),
-                            "rainfall": float(row_dict['Rainfall'])
-                        }
-                    }
-                writer.write_point(json_body)
-
-
-def level4():
-    influx_client.drop_measurement("level4")
-    with open("./level4.csv", "r", encoding="utf-8") as f:
-        r = csv.reader(f, delimiter="\t")
-        headers = next(r)
-        with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
-            while True:
-                try:
-                    row = next(r)
-                except (IndexError, StopIteration):
-                    break
-                print(row)
-                row_dict = {}
-                site_num = int(row[0])
-                for ci, cval in enumerate(row):
-                    col_name = headers[ci]
-                    row_dict[col_name] = cval
-                iso_timestamp = sql_to_isostring(row_dict['Timestamp'])
-                try:
-                    soil_moist_filtered = float(row_dict['SoilMoistFiltered'])
-                except ValueError:
-                    soil_moist_filtered = 0.0
-                try:
-                    depth_filtered = float(row_dict['DepthFiltered'])
-                except ValueError:
-                    depth_filtered = 0.0
-                json_body = {
-                        "measurement": "level4",
-                        "tags": {
-                            "site_no": site_num
-                        },
-                        "time": iso_timestamp, #"2009-11-10T23:00:00Z",
-                        "fields": {
-                            "soil_moist": float(row_dict['SoilMoist']),
-                            "effective_depth": float(row_dict['EffectiveDepth']),
-                            "rainfall": float(row_dict['Rainfall']),
-                            "soil_moist_filtered": soil_moist_filtered,
-                            "depth_filtered": depth_filtered
-                        }
-                    }
-                writer.write_point(json_body)
-
-
-def raw_vals():
-    from_time = datetime.min
+def raw_vals(from_time=None):
+    if from_time is None:
+        from_time = datetime.min
     #from_time = datetime.utcnow() - timedelta(days=120)
     from_time_sql = datetime_to_sql(from_time)
     con1 = CosmozSQLConnection()
@@ -335,11 +166,42 @@ def raw_vals():
                     writer.write_point(json_body)
 
 if __name__ == "__main__":
-    influx_client.create_database("cosmoz")
-    #silo_data()
-    intensities()
-    raw_vals()
-    # level2()
-    # level1()
-    #level3()
-    #level4()
+    parser = argparse.ArgumentParser(description='Pre-populate the cosmoz influx database with values from the mssql db.')
+
+    parser.add_argument('-d', '--process-days', type=str, dest="processdays",
+                        help='Number of days to backprocess. Default is all of history.')
+    parser.add_argument('-t', '--from-datetime', type=str, dest="fromdatetime",
+                        help='The earliest datetime to pre-populate to. In isoformat. Default is all of history.\nNote cannot use -d and -t together.')
+    parser.add_argument('-o', '--output', dest='output', nargs='?', type=argparse.FileType('w'),
+                        help='Send output to a file (defaults to stdout).',
+                        default=sys.stdout)
+    args = parser.parse_args()
+    outfile = args.output
+    def printout(*values, sep=' ', end='\n'):
+        return print(*values, sep=sep, end=end, file=outfile, flush=True)
+    try:
+        processdays = args.processdays
+        fromdatetime = args.fromdatetime
+        if processdays is not None and fromdatetime is not None:
+            raise RuntimeError("Cannot use -d and -t at the same time. Pick one.")
+        if processdays:
+            try:
+                processdays = int(processdays)
+            except:
+                raise RuntimeError("-d must be an integer")
+            from_time = datetime.now().astimezone(timezone.utc) - timedelta(days=processdays)
+        else:
+            if fromdatetime is None:
+                from_time = datetime.min
+            else:
+                from_time = isostring_to_datetime(fromdatetime)
+        influx_client.create_database(influx_config['DB_NAME'])
+        printout("Importing SILO Data.")
+        silo_data(from_time)
+        printout("Importing Intensities vals.")
+        intensities(from_time)
+        printout("Importing raw vals.")
+        raw_vals(from_time)
+    finally:
+        printout("Done.")
+        outfile.close()

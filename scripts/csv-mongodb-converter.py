@@ -17,28 +17,20 @@ limitations under the License.
 """
 import csv
 import time
-from datetime import datetime
 from bson import Decimal128
 from pymongo import MongoClient
+from _mongo_db_config import consts as mongodb_config
+from utils import isostring_to_datetime, sql_to_isostring
 
-client = MongoClient('localhost', 27018)  # 27017
-
-def isostring_to_datetime(iso_string):
-    try:
-       return datetime.strptime(iso_string, "%Y-%m-%dT%H:%M:%SZ")
-    except:
-       return datetime.strptime(iso_string, "%Y-%m-%dT%H:%M:%S.%fZ")
-
-def sql_to_isostring(sql_datetime):
-    timestamp_parts = str(sql_datetime).split(' ')
-    return "{}T{}Z".format(timestamp_parts[0], timestamp_parts[1])
+client = MongoClient(mongodb_config['DB_HOST'], mongodb_config['DB_PORT'])  # 27017
 
 def all_stations():
-    db = client.cosmoz
+    db = getattr(client, mongodb_config['DB_NAME'])
     all_stations_collection = db.all_stations
-    with open("./stations.csv", "r", encoding="latin1") as f:
+    with open("./all_stations.tsv", "r", encoding="latin1") as f:
         r = csv.reader(f, delimiter="\t")
         headers = next(r)
+        accum_cache = []
         while True:
             try:
                 row = next(r)
@@ -46,40 +38,39 @@ def all_stations():
                 break
             print(row)
             row_dict = {}
-            site_num = int(row[0])
             for ci, cval in enumerate(row):
                 col_name = headers[ci]
                 row_dict[col_name] = cval
             doc_body = {
-                'site_no': site_num,
-                'site_name': row_dict['SiteName'],
-                'tube_type': row_dict['TubeType'],
-                'network': row_dict['Network'],
-                'imei': row_dict['IMEI'],
-                'sat_data_select': row_dict['SatDataSelect'],
-                'hydroinnova_serial_no': row_dict['HydroinnovaSerialNo'],
-                'latitude': Decimal128(row_dict['Latitude']),
-                'longitude': Decimal128(row_dict['Longitude']),
-                'altitude': Decimal128(row_dict['Altitude']),
-                'installation_date': isostring_to_datetime(sql_to_isostring(row_dict['InstallationDate'])),
-                'contact': row_dict['Contact'],
-                'email': row_dict['Email'],
-                'site_description': row_dict['SiteDescription'],
-                'calibration_type': row_dict['CalibrationType'],
-                'timezone': str(row_dict['Timezone']),
-                'ref_pressure': Decimal128(row_dict['RefPressure']),
-                'ref_intensity': Decimal128(row_dict['RefIntensity']),
-                'cutoff_rigidity': Decimal128(row_dict['CutoffRigidity']),
-                'elev_scaling': Decimal128(row_dict['ElevScaling']),
-                'latit_scaling': Decimal128(row_dict['LatitScaling']),
-                'scaling': Decimal128(row_dict['Scaling']),
-                'beta': Decimal128(row_dict['Beta']),
-                'n0_cal': Decimal128(row_dict['N0_Cal']),
-                'bulk_density': Decimal128(row_dict['BulkDensity']),
-                'lattice_water_g_g': Decimal128(row_dict['LatticeWater_g_g']),
-                'soil_organic_matter_g_g': Decimal128(row_dict['SoilOrganicMatter_g_g']),
-                'site_photo_name': row_dict['SitePhotoName'],
-                'nmdb': row_dict['NMDB']
+                'site_no': row_dict['site_no'],
+                'site_name': row_dict['site_name'],
+                'tube_type': row_dict['tube_type'],
+                'network': row_dict['network'],
+                'imei': row_dict['imei'],
+                'sat_data_select': row_dict['sat_data_select'],
+                'hydroinnova_serial_no': row_dict['hydroinnova_serial_no'],
+                'latitude': Decimal128(row_dict['latitude']),
+                'longitude': Decimal128(row_dict['longitude']),
+                'altitude': Decimal128(row_dict['altitude']),
+                'installation_date': isostring_to_datetime(row_dict['installation_date']),
+                'contact': row_dict['contact'],
+                'email': row_dict['email'],
+                'site_description': row_dict['site_description'],
+                'calibration_type': row_dict['calibration_type'],
+                'timezone': str(row_dict['timezone']),
+                'ref_pressure': Decimal128(row_dict['ref_pressure']),
+                'ref_intensity': Decimal128(row_dict['ref_intensity']),
+                'cutoff_rigidity': Decimal128(row_dict['cutoff_rigidity']),
+                'elev_scaling': Decimal128(row_dict['elev_scaling']),
+                'latit_scaling': Decimal128(row_dict['latit_scaling']),
+                'scaling': Decimal128(row_dict['scaling']),
+                'beta': Decimal128(row_dict['beta']),
+                'n0_cal': Decimal128(row_dict['n0_cal']),
+                'bulk_density': Decimal128(row_dict['bulk_density']),
+                'lattice_water_g_g': Decimal128(row_dict['lattice_water_g_g']),
+                'soil_organic_matter_g_g': Decimal128(row_dict['soil_organic_matter_g_g']),
+                'site_photo_name': row_dict['site_photo_name'],
+                'nmdb': row_dict['nmdb']
             }
             accum_cache.append(doc_body)
             if len(accum_cache) > 9:

@@ -15,48 +15,32 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-
+import argparse
+import sys
+from multiprocessing import Process, Pool, Queue
 import math
-from datetime import date, time as d_time, datetime, timedelta
+from datetime import time as d_time, datetime, timedelta, timezone
 from influxdb import InfluxDBClient
 from pymongo import MongoClient
 
 from influx_cached_writer import AccumCacheInfluxWriter
+from utils import datetime_to_isostring, isostring_to_datetime
+from _influx_db_config import consts as influx_config
+from _mongo_db_config import consts as mongodb_config
 
-influx_client = InfluxDBClient('localhost', 8186, 'root', 'root', 'cosmoz', timeout=30)
+influx_client = InfluxDBClient(
+    influx_config['DB_HOST'], influx_config['DB_PORT'],
+    influx_config['DB_USERNAME'], influx_config['DB_PASSWORD'],
+    influx_config['DB_NAME'], timeout=30)
 
 THIRTY_YEARS = timedelta(days=365 * 30)
 TEN_YEARS = timedelta(days=365 * 10)
 ONE_YEAR = timedelta(days=365)
 
-def datetime_to_isostring(py_datetime):
-    """
-    :param py_datetime:
-    :type py_datetime: datetime
-    :return: the iso string representation
-    :rtype: str
-    """
-    if isinstance(py_datetime, date) and not isinstance(py_datetime, datetime):
-        return py_datetime.strftime("%Y-%m-%dT00:00:00Z")
-    if hasattr(py_datetime, 'microsecond') and py_datetime.microsecond > 0:
-        return py_datetime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    return py_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-def isostring_to_datetime(iso_string):
-    """
-    :param iso_string:
-    :type iso_string: str
-    :return: the python datetime obj
-    :rtype: datetime
-    """
-    try:
-       return datetime.strptime(iso_string, "%Y-%m-%dT%H:%M:%SZ")
-    except:
-       return datetime.strptime(iso_string, "%Y-%m-%dT%H:%M:%S.%fZ")
 
 def level3_to_level4(site_no=1, start_time=None, backprocess=None):
     if start_time is None:
-        start_time = datetime.utcnow()
+        start_time = datetime.now().astimezone(timezone.utc)
     if backprocess is None:
         backprocess = TEN_YEARS
     back_time = start_time - backprocess
@@ -107,12 +91,12 @@ LIMIT 7)""".format(three_h_ago, three_h_fwd, site_no))
 
 def level2_to_level3(mongo_client, site_no=1, start_time=None, backprocess=None):
     if start_time is None:
-        start_time = datetime.utcnow()
+        start_time = datetime.now().astimezone(timezone.utc)
     if backprocess is None:
         backprocess = TEN_YEARS
     back_time = start_time - backprocess
     time_string = datetime_to_isostring(back_time)
-    mdb = mongo_client.cosmoz
+    mdb = getattr(mongo_client, mongodb_config['DB_NAME'])
     all_stations = mdb.all_stations
     this_site = all_stations.find_one({'site_no': site_no})
     result = influx_client.query("""\
@@ -165,12 +149,12 @@ WHERE "time" > '{}' AND site_no='{}'""".format(time_string, site_no))
 def level1_to_level2(mongo_client, site_no=1, start_time=None, backprocess=None):
     emulate_old_version = False
     if start_time is None:
-        start_time = datetime.utcnow()
+        start_time = datetime.now().astimezone(timezone.utc)
     if backprocess is None:
         backprocess = TEN_YEARS
     back_time = start_time - backprocess
     time_string = datetime_to_isostring(back_time)
-    mdb = mongo_client.cosmoz
+    mdb = getattr(mongo_client, mongodb_config['DB_NAME'])
     all_stations_collection = mdb.all_stations
     this_site = all_stations_collection.find_one({'site_no': site_no})
     result = influx_client.query("""\
@@ -309,7 +293,7 @@ WHERE "time" > '{}' AND site_no='{}'""".format(time_string, site_no))
 
 def raw_to_level1(site_no=1, start_time=None, backprocess=None):
     if start_time is None:
-        start_time = datetime.utcnow()
+        start_time = datetime.now().astimezone(timezone.utc)
     if backprocess is None:
         backprocess = TEN_YEARS
     back_time = start_time - backprocess
@@ -376,7 +360,7 @@ WHERE "time" > '{}' AND site_no='{}';""".format(time_string, site_no))
 
 def test1(site_no=1, start_time=None):
     if start_time is None:
-        start_time = datetime.utcnow()
+        start_time = datetime.now().astimezone(timezone.utc)
     back_time = start_time - TEN_YEARS
     time_string = datetime_to_isostring(back_time)
     result1 = influx_client.query("""\
@@ -403,7 +387,7 @@ def test1(site_no=1, start_time=None):
 
 def test2(site_no=1, start_time=None):
     if start_time is None:
-        start_time = datetime.utcnow()
+        start_time = datetime.now().astimezone(timezone.utc)
     back_time = start_time - TEN_YEARS
     time_string = datetime_to_isostring(back_time)
     result1 = influx_client.query("""\
@@ -448,7 +432,7 @@ def test2(site_no=1, start_time=None):
 
 def test3(site_no=1, start_time=None):
     if start_time is None:
-        start_time = datetime.utcnow()
+        start_time = datetime.now().astimezone(timezone.utc)
     back_time = start_time - TEN_YEARS
     time_string = datetime_to_isostring(back_time)
     result1 = influx_client.query("""\
@@ -494,7 +478,7 @@ def test3(site_no=1, start_time=None):
 
 def test4(site_no=1, start_time=None):
     if start_time is None:
-        start_time = datetime.utcnow()
+        start_time = datetime.now().astimezone(timezone.utc)
     back_time = start_time - TEN_YEARS
     time_string = datetime_to_isostring(back_time)
     result1 = influx_client.query("""\
@@ -541,39 +525,42 @@ def test4(site_no=1, start_time=None):
     return d < 1
 
 
-def process_levels(site_no, start_time=None, backprocess=None, do_tests=False):
-    mongo_client = MongoClient('localhost', 27018)  # 27017
-    p_start_time = datetime.utcnow()
+def process_levels(site_no, options={}):
+    start_time = options.get('start_time', None)
+    backprocess = options.get('backprocess', None)
+    do_tests = options.get('do_tests', False)
+    mongo_client2 = MongoClient(mongodb_config['DB_HOST'], mongodb_config['DB_PORT'])  # 27017
+    p_start_time = datetime.now().astimezone(timezone.utc)
     if start_time is None:
         start_time = p_start_time
     print("Starting process_levels for site {}, at {}".format(site_no, p_start_time))
     if do_tests:
         print("Doing site {} with sanity tests turned on. This takes longer.".format(site_no))
-    #raw_to_level1(site_no=site_no, start_time=start_time, backprocess=backprocess)
-    #if do_tests:
-    #    assert test1(site_no=site_no, start_time=start_time)
-    level1_to_level2(mongo_client, site_no=site_no, start_time=start_time, backprocess=backprocess)
+    raw_to_level1(site_no=site_no, start_time=start_time, backprocess=backprocess)
+    if do_tests:
+        assert test1(site_no=site_no, start_time=start_time)
+    level1_to_level2(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess)
     if do_tests:
         assert test2(site_no=site_no, start_time=start_time)
-    level2_to_level3(mongo_client, site_no=site_no, start_time=start_time, backprocess=backprocess)
+    level2_to_level3(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess)
     if do_tests:
         assert test3(site_no=site_no, start_time=start_time)
     level3_to_level4(site_no=site_no, start_time=start_time, backprocess=backprocess)
     if do_tests:
         assert test4(site_no=site_no, start_time=start_time)
-    end_time = datetime.utcnow()
-    print("Finished process_levels for site {}, at {}".format(site_no, end_time))
-    print("Site {} process_levels took {}".format(site_no, (end_time-p_start_time)))
+    p_end_time = datetime.now().astimezone(timezone.utc)
+    print("Finished process_levels for site {}, at {}".format(site_no, p_end_time))
+    print("Site {} process_levels took {}".format(site_no, (p_end_time-p_start_time)))
 
 
 # if __name__ == "__main__":
 #     from threading import Thread
 #     #process_levels(site_no=2, do_tests=True)
-#     mdb = mongo_client.cosmoz
+#     mdb = getattr(mongo_client, mongodb_config['DB_NAME'])
 #     all_sites = mdb.all_sites
 #     all_stations_docs = mdb.all_stations
 #     all_stations = all_stations_docs.find({}, {'site_no': 1})
-#     start_time = datetime.utcnow()
+#     start_time = datetime.now().astimezone(timezone.utc)
 #     threads = []
 #     print("Using multithreading")
 #     for s in all_stations:
@@ -588,24 +575,55 @@ def process_levels(site_no, start_time=None, backprocess=None, do_tests=False):
 #     print("All sites process_levels took {}".format((end_time-start_time)))
 
 if __name__ == "__main__":
-    from multiprocessing import Process
-    mongo_client = MongoClient('localhost', 27018)  # 27017
-    #process_levels(site_no=2, do_tests=True)
-    mdb = mongo_client.cosmoz
-    all_sites = mdb.all_sites
-    all_stations_docs = mdb.all_stations
-    all_stations = all_stations_docs.find({}, {'site_no': 1})
-    mongo_client.close()
-    start_time = datetime.utcnow()
-    processes = []
-    print("Using multiprocessing")
-    for s in all_stations:
-        site_no = s['site_no']
-        #process_levels(site_no, start_time=start_time, do_tests=False, backprocess=ONE_YEAR)
-        p = Process(target=process_levels, args=(site_no,), kwargs={'start_time': start_time, 'do_tests': False, 'backprocess': THIRTY_YEARS})
-        p.start()
-        processes.append(p)
-    _ = [p.join() for p in processes]
-    end_time = datetime.utcnow()
-    print("Finished process_levels for All Sites at {}".format(end_time))
-    print("All sites process_levels took {}".format((end_time-start_time)))
+    start_time = datetime.now().astimezone(timezone.utc)
+    parser = argparse.ArgumentParser(description='Run the processing levels on the cosmoz influxdb.')
+
+    parser.add_argument('-d', '--process-days', type=str, dest="processdays",
+                        help='Number of days to backprocess. Default is 365 days.')
+    parser.add_argument('-t', '--from-datetime', type=str, dest="fromdatetime",
+                        help='The earliest datetime to backprocess to. In isoformat. Default is all of history.\nNote cannot use -d and -t together.')
+    parser.add_argument('-o', '--output', dest='output', nargs='?', type=argparse.FileType('w'),
+                        help='Send output to a file (defaults to stdout).',
+                        default=sys.stdout)
+    args = parser.parse_args()
+    outfile = args.output
+    def printout(*values, sep=' ', end='\n'):
+        return print(*values, sep=sep, end=end, file=outfile, flush=True)
+    try:
+        processdays = args.processdays
+        fromdatetime = args.fromdatetime
+        if processdays is not None and fromdatetime is not None:
+            raise RuntimeError("Cannot use -d and -t at the same time. Pick one.")
+        if processdays:
+            try:
+                processdays = int(processdays)
+            except:
+                raise RuntimeError("-d must be an integer")
+            backprocess = timedelta(days=processdays)
+        else:
+            if fromdatetime is None:
+                backprocess = ONE_YEAR
+            else:
+                fromdatetime = isostring_to_datetime(fromdatetime)
+            backprocess = start_time - fromdatetime
+        if backprocess.days < 0:
+            raise RuntimeError("Cannot backprocess negative time. Ensure it is positive.")
+        mongo_client = MongoClient(mongodb_config['DB_HOST'], mongodb_config['DB_PORT'])  # 27017
+        mdb = getattr(mongo_client, mongodb_config['DB_NAME'])
+        all_sites = mdb.all_sites
+        all_stations_docs = mdb.all_stations
+        all_stations = all_stations_docs.find({}, {'site_no': 1})
+        mongo_client.close()
+        processes = []
+        printout("Using multiprocessing")
+        pool = Pool(None)  # uses os.cpu_count
+        with pool as p:
+            worker_options = {'start_time': start_time, 'do_tests': False, 'backprocess': backprocess}
+            worker_args = [(s['site_no'], worker_options) for s in all_stations]
+            p.starmap(process_levels, worker_args)
+        end_time = datetime.now().astimezone(timezone.utc)
+        printout("Finished process_levels for All Sites at {}".format(end_time))
+        printout("All sites process_levels took {}".format((end_time - start_time)))
+    finally:
+        outfile.close()
+

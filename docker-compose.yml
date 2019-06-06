@@ -55,8 +55,6 @@ networks:
   backend:
       
 volumes:
-#  timeseriesdb-data:
-#  documentdb-data:
   timeseriesdb-data:
     driver_opts:
       type: none

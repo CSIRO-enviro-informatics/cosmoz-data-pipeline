@@ -2,6 +2,8 @@
 *.sif
 __pycache__/
 scripts/_sql_db_config.py
+scripts/_mongo_db_config.py
+scripts/_influx_db_config.py
 scripts/venv/
 *.wt
 *.lock

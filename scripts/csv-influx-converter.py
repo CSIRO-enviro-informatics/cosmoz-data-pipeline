@@ -18,11 +18,13 @@ limitations under the License.
 import csv
 from influxdb import InfluxDBClient
 from influx_cached_writer import AccumCacheInfluxWriter
+from _influx_db_config import consts as influx_config
+from utils import sql_to_isostring
 
-influx_client = InfluxDBClient('localhost', 8186, 'root', 'root', 'cosmoz', timeout=30)
-def sql_to_isostring(sql_datetime):
-    timestamp_parts = str(sql_datetime).split(' ')
-    return "{}T{}Z".format(timestamp_parts[0], timestamp_parts[1])
+influx_client = InfluxDBClient(
+    influx_config['DB_HOST'], influx_config['DB_PORT'],
+    influx_config['DB_USERNAME'], influx_config['DB_PASSWORD'],
+    influx_config['DB_NAME'], timeout=30)
 
 def intensities():
     with open("./intensity.csv", "r", encoding="utf-8") as f:
@@ -306,7 +308,7 @@ def raw_vals():
                 writer.write_point(json_body)
 
 if __name__ == "__main__":
-    influx_client.create_database("cosmoz")
+    influx_client.create_database(influx_config['DB_NAME'])
     silo_data()
     intensities()
     # raw_vals()
