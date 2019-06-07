@@ -18,6 +18,7 @@ RUN source ./venv/bin/activate &&\
     cd ./scripts &&\
     pip3 install -r requirements.txt &&\
     deactivate
+WORKDIR /usr/local/lib/cosmoz-data-pipeline/scripts
 RUN touch ./_influx_db_config.py && touch ./_mongo_db_config.py && touch ./_sql_db_config.py
 WORKDIR /usr/local/lib/cosmoz-rest-wrapper
 RUN virtualenv -p python3 venv
