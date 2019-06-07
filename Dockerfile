@@ -14,6 +14,7 @@ RUN git clone https://github.com/CSIRO-enviro-informatics/cosmoz-data-pipeline.g
 WORKDIR /usr/local/lib/cosmoz-data-pipeline
 RUN virtualenv -p python3 venv
 RUN source ./venv/bin/activate &&\
+    pip3 install cython pymssql
     cd ./scripts &&\
     pip3 install -r requirements.txt &&\
     deactivate
