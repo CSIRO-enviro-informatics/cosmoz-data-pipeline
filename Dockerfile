@@ -6,15 +6,15 @@ ENV INFLUXDB_HOST=localhost
 ENV INFLUXDB_PORT=8086
 RUN echo 'https://dl-3.alpinelinux.org/alpine/v3.9/main' >> /etc/apk/repositories
 RUN echo 'https://dl-3.alpinelinux.org/alpine/v3.9/community' >> /etc/apk/repositories
-RUN apk add --no-cache bash tini-static python3 py3-virtualenv libuv libstdc++
-RUN apk add --no-cache --virtual buildenv git libuv-dev python3-dev build-base
+RUN apk add --no-cache bash tini-static python3 py3-virtualenv libuv libstdc++ freetds
+RUN apk add --no-cache --virtual buildenv git libuv-dev freetds-dev python3-dev build-base
 WORKDIR /usr/local/lib
 RUN git clone https://github.com/CSIRO-enviro-informatics/cosmoz-rest-wrapper.git
 RUN git clone https://github.com/CSIRO-enviro-informatics/cosmoz-data-pipeline.git
 WORKDIR /usr/local/lib/cosmoz-data-pipeline
 RUN virtualenv -p python3 venv
 RUN source ./venv/bin/activate &&\
-    pip3 install cython pymssql &&\
+    pip3 install --upgrade cython &&\
     cd ./scripts &&\
     pip3 install -r requirements.txt &&\
     deactivate
