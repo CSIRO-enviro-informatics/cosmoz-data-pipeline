@@ -1,13 +1,14 @@
 version: "3.4"
 services:
 
-  timeseriesdb:
+  cosmoz.influxdb:
     image: influxdb:1.7-alpine
-    ports:
-      - "8186:8086"
-      - "8188:8088"
+    #ports:
+    #  - "8186:8086"
+    #  - "8188:8088"
     networks:
       - backend
+    hostname: "cosmoz.influxdb"
     volumes:
       # The /var/lib/influxdb dir has subdirs {data, meta, wal} all need to be persisted.
       - timeseriesdb-data:/var/lib/influxdb
@@ -19,11 +20,14 @@ services:
       - INFLUX_DB=cosmoz
     command: ["influxd", "-config", "/etc/influxdb/influxdb.conf"]
   
-  documentdb:
+  cosmoz.mongodb:
     image: mvertes/alpine-mongo:latest
-    ports:
-      - "27018:27017"
-      - "28017"
+    #ports:
+    #  - "27018:27017"
+    #  - "28017"
+    networks:
+      - backend
+    hostname: "cosmoz.mongodb"
     volumes:
       - documentdb-data:/data/db
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -40,26 +44,27 @@ services:
   visualizer:
     image: chronograf:1.7-alpine
     depends_on:
-      - timeseriesdb 
-    ports:
-      - "8888:8888"
+      - cosmoz.influxdb
+    #ports:
+    #  - "8888:8888"
     networks:
       - backend
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "/etc/localtime:/etc/localtime:ro"
       - "/etc/timezone:/etc/timezone:ro"
-    command: ["chronograf", "--influxdb-url=http://timeseriesdb:8086"]
+    command: ["chronograf", "--influxdb-url=http://cosmoz.influxdb:8086"]
 
-  app-rest:
+  cosmoz.application:
     image: cosmoz/app-rest
     build:
       dockerfile: ./Dockerfile
       context: .
       network: host
+    hostname: "cosmoz.application"
     depends_on:
-      - timeseriesdb
-      - documentdb
+      - cosmoz.influxdb
+      - cosmoz.mongodb
     ports:
       - "8098:8080"
     networks:
