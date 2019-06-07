@@ -1,4 +1,4 @@
-version: "3"
+version: "3.4"
 services:
 
   timeseriesdb:
@@ -50,6 +50,20 @@ services:
       - "/etc/localtime:/etc/localtime:ro"
       - "/etc/timezone:/etc/timezone:ro"
     command: ["chronograf", "--influxdb-url=http://timeseriesdb:8086"]
+
+  app-rest:
+    image: cosmoz/app-rest
+    build:
+      dockerfile: ./Dockerfile
+      context: .
+      network: host
+    depends_on:
+      - timeseriesdb
+      - documentdb
+    ports:
+      - "8098:8080"
+    networks:
+      - backend
 
 networks:
   backend:
