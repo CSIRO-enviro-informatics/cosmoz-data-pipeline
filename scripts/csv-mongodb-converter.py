@@ -15,8 +15,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+from io import StringIO
 import csv
 import time
+import datetime
+from urllib import request
 from bson import Decimal128
 from pymongo import MongoClient
 from _mongo_db_config import consts as mongodb_config
@@ -97,6 +100,104 @@ def all_stations():
                     raise er
             del accum_cache
 
+def stations_calibration():
+    db = getattr(client, mongodb_config['DB_NAME'])
+    all_stations_collection = db.all_stations
+    cal_txt_collection = db.stations_calibration_txt
+    cal_collection = db.stations_calibration
+    res = all_stations_collection.find({})
+    for i in res:
+        time.sleep(0.5)
+        site_no = i['site_no']
+        #url = "http://cosmoz.csiro.au/wp-content/themes/cosmoz/data-files/Site{:0>2}_CalculatedNodeData.txt".format(site_no)
+        url = "http://cosmoz.csiro.au/sensor-information/?SiteNo={:0>2}".format(site_no)
+        r = request.Request(url)
+        try:
+            with request.urlopen(r) as f:
+                pass
+        except Exception as e:
+            pass
+        time.sleep(0.5)
+        url = "http://cosmoz.csiro.au/wp-content/themes/cosmoz/data-files/Site{:0>2}_SCD.txt".format(site_no)
+        r = request.Request(url)
+        try:
+            with request.urlopen(r) as f:
+                resp = f.read()
+                if resp:
+                    resp = resp.decode("utf-8")
+        except Exception as e:
+            print(e)
+            raise
+        if not resp:
+            continue
+        # doc_body = {
+        #     "site_no": site_no,
+        #     "calibration_txt": resp
+        # }
+        # cal_txt_collection.update_one({"site_no": site_no}, {"$set": doc_body}, upsert=True)
+        stringio = StringIO(resp)
+        lines = iter(stringio.readlines())
+        h1 = next(lines)
+        h2 = next(lines)
+        headers = ["date", "label", "loc", "depth", "vol", "total_wet", "total_dry", "tare", "soil_wet", "soil_dry", "gwc", "bd", "vwc"]
+        to_add = []
+        try:
+            line = next(lines)
+        except:
+            line = None
+        while line:
+            line = line.replace("                 ", "  NULL  NULL  ")
+            line = line.replace("         ", "  NULL  ")
 
+            parts = line.split(" ")
+            parts = list(filter(None,[p.strip(" \n\r\t") for p in parts]))
+            if parts[3] == "NULL":
+                _ = parts.pop(3)
+            if parts[2] == "NULL":
+                _ = parts.pop(2)
+            for pi,part in enumerate(parts):
+                if part == "to":
+                    prev = parts.pop(pi-1)
+                    after = parts.pop(pi)
+                    if len(prev) > 2:
+                        prevprev = prev[0:-2]
+                        prev = prev[-2:]
+                        parts.insert(pi-1, prevprev)
+                        pi+=1
+                    parts[pi-1] = "{} to {}".format(prev, after)
+                    if parts[pi] == "cm":
+                        after_after = parts.pop(pi)
+                        parts[pi-1] = "{} {}".format(parts[pi-1], after_after)
+                    break
+                if part == "cm":
+                    prev = parts.pop(pi-1)
+                    parts[pi-1] = "{} cm".format(prev)
+                    break
+            try:
+                assert len(parts) == len(headers)
+                tagged_parts = {headers[i]: p for i, p in enumerate(parts)}
+                tagged_parts['date'] = datetime.datetime.strptime(tagged_parts['date'], "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)
+                for kl in ("total_wet", "total_dry", "tare", "soil_wet", "soil_dry", "gwc", "bd", "vwc"):
+                    part = tagged_parts[kl]
+                    tagged_parts[kl] = Decimal128('NaN') if (part == "" or part == "NULL") else Decimal128(part)
+                tagged_parts['site_no'] = site_no
+                to_add.append(tagged_parts)
+            except Exception as e:
+                print(e)
+                print(line)
+                continue
+            finally:
+                try:
+                    line = next(lines)
+                except:
+                    line = None
+        if to_add:
+            cal_collection.insert_many(to_add)
+#
+#YYYY-MM-DD    LABEL      LOC               DEPTH     VOL?    TOTAL    TOTAL     TARE     SOIL     SOIL      GWC       BD      VWC
+#      UTC                                                     WET      DRY               WET      DRY
+#2011-09-22        1        1           0 to 5 cm     Vol.   168.21   161.55    66.19   102.02    95.36     6.98     0.97     6.78
+#2011-09-22        2        1         10 to 15 cm     Vol.   148.91   142.63    66.06    82.85    76.57     4.40     1.45     6.40
 if __name__ == "__main__":
-    all_stations()
+    #all_stations()
+    stations_calibration()
