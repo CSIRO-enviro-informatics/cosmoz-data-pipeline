@@ -109,7 +109,6 @@ def stations_calibration():
     for i in res:
         time.sleep(0.5)
         site_no = i['site_no']
-        #url = "http://cosmoz.csiro.au/wp-content/themes/cosmoz/data-files/Site{:0>2}_CalculatedNodeData.txt".format(site_no)
         url = "http://cosmoz.csiro.au/sensor-information/?SiteNo={:0>2}".format(site_no)
         r = request.Request(url)
         try:
@@ -193,11 +192,7 @@ def stations_calibration():
                     line = None
         if to_add:
             cal_collection.insert_many(to_add)
-#
-#YYYY-MM-DD    LABEL      LOC               DEPTH     VOL?    TOTAL    TOTAL     TARE     SOIL     SOIL      GWC       BD      VWC
-#      UTC                                                     WET      DRY               WET      DRY
-#2011-09-22        1        1           0 to 5 cm     Vol.   168.21   161.55    66.19   102.02    95.36     6.98     0.97     6.78
-#2011-09-22        2        1         10 to 15 cm     Vol.   148.91   142.63    66.06    82.85    76.57     4.40     1.45     6.40
+
 if __name__ == "__main__":
-    #all_stations()
+    all_stations()
     stations_calibration()
