@@ -99,6 +99,10 @@ def level2_to_level3(mongo_client, site_no=1, start_time=None, backprocess=None)
     mdb = getattr(mongo_client, mongodb_config['DB_NAME'])
     all_stations = mdb.all_stations
     this_site = all_stations.find_one({'site_no': site_no})
+    try:
+        alternate_algorithm = this_site["alternate_algorithm"]
+    except LookupError:
+        alternate_algorithm = None
     result = influx_client.query("""\
 SELECT "time", site_no, wv_corr, corr_count, rain, flag as level2_flag
 --SELECT "time", site_no, wv_corr, corr_count, flag as level2_flag
@@ -124,7 +128,12 @@ WHERE "time" > '{}' AND site_no='{}'""".format(time_string, site_no))
                 flag = 2
             else:
                 flag = int(p['level2_flag'])
-            corrected_moist_val = (0.0808 / ((corr_count / n0_cal) - 0.372) - 0.115 - lattice_soil_organic_sum) * bulk_density
+            if alternate_algorithm and alternate_algorithm == "sandy":
+                a = 1216036430
+                b = -3.272
+                corrected_moist_val = a * (corr_count ** b)
+            else:
+                corrected_moist_val = (0.0808 / ((corr_count / n0_cal) - 0.372) - 0.115 - lattice_soil_organic_sum) * bulk_density
             #((0.0808 / ((l2.CorrCount / a.N0_Cal) - 0.372) - 0.115 - a.LatticeWater_g_g - a.SoilOrganicMatter_g_g) * a.BulkDensity) * 100
             soil_moisture = corrected_moist_val * 100
             #5.8 / ( ((a.LatticeWater_g_g + a.SoilOrganicMatter_g_g) * a.BulkDensity) + ( (0.0808 / ( (l2.CorrCount / a.N0_Cal) - 0.372) - 0.115 - a.LatticeWater_g_g - a.SoilOrganicMatter_g_g) * a.BulkDensity ) + 0.0829) AS EffectiveDepth,
@@ -578,6 +587,8 @@ if __name__ == "__main__":
     start_time = datetime.now().astimezone(timezone.utc)
     parser = argparse.ArgumentParser(description='Run the processing levels on the cosmoz influxdb.')
 
+    parser.add_argument('-s', '--site-number', type=str, dest="siteno",
+                        help='Pick just one site number')
     parser.add_argument('-d', '--process-days', type=str, dest="processdays",
                         help='Number of days to backprocess. Default is 365 days.')
     parser.add_argument('-t', '--from-datetime', type=str, dest="fromdatetime",
@@ -592,6 +603,7 @@ if __name__ == "__main__":
     try:
         processdays = args.processdays
         fromdatetime = args.fromdatetime
+        siteno = args.siteno
         if processdays is not None and fromdatetime is not None:
             raise RuntimeError("Cannot use -d and -t at the same time. Pick one.")
         if processdays:
@@ -612,7 +624,11 @@ if __name__ == "__main__":
         mdb = getattr(mongo_client, mongodb_config['DB_NAME'])
         all_sites = mdb.all_sites
         all_stations_docs = mdb.all_stations
-        all_stations = all_stations_docs.find({}, {'site_no': 1})
+        if siteno is not None:
+            siteno = int(siteno)
+            all_stations = all_stations_docs.find({'site_no': siteno}, {'site_no': 1})
+        else:
+            all_stations = all_stations_docs.find({}, {'site_no': 1})
         mongo_client.close()
         processes = []
         printout("Using multiprocessing")
