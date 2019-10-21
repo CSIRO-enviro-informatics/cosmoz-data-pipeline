@@ -38,7 +38,7 @@ TEN_YEARS = timedelta(days=365 * 10)
 ONE_YEAR = timedelta(days=365)
 
 
-def level3_to_level4(site_no=1, start_time=None, backprocess=None):
+def level3_to_level4(site_no=1, start_time=None, backprocess=None, drop_old=False):
     if start_time is None:
         start_time = datetime.now().astimezone(timezone.utc)
     if backprocess is None:
@@ -51,7 +51,10 @@ SELECT "time", site_no, soil_moist, effective_depth, rainfall
 FROM "level3"
 WHERE "time" > '{}' AND flag='0' AND site_no='{}'""".format(time_string, site_no))
     points = result.get_points()
-    #influx_client.query("DROP SERIES FROM level4_temp WHERE site_no='{}';".format(site_no), method='POST')
+    if drop_old:
+        influx_client.query(
+            "DROP SERIES FROM level4 WHERE site_no='{}';".format(site_no),
+            method='POST')
     with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
         for p in points:
             this_datetime = isostring_to_datetime(p['time'])
@@ -89,7 +92,7 @@ LIMIT 7)""".format(three_h_ago, three_h_fwd, site_no))
             writer.write_point(json_body)
 
 
-def level2_to_level3(mongo_client, site_no=1, start_time=None, backprocess=None):
+def level2_to_level3(mongo_client, site_no=1, start_time=None, backprocess=None, drop_old=False):
     if start_time is None:
         start_time = datetime.now().astimezone(timezone.utc)
     if backprocess is None:
@@ -103,6 +106,8 @@ def level2_to_level3(mongo_client, site_no=1, start_time=None, backprocess=None)
         alternate_algorithm = this_site["alternate_algorithm"]
     except LookupError:
         alternate_algorithm = None
+    sandy_a = 1216036430.0
+    sandy_b = -3.272
     result = influx_client.query("""\
 SELECT "time", site_no, wv_corr, corr_count, rain, flag as level2_flag
 --SELECT "time", site_no, wv_corr, corr_count, flag as level2_flag
@@ -110,7 +115,8 @@ SELECT "time", site_no, wv_corr, corr_count, rain, flag as level2_flag
 FROM "level2"
 WHERE "time" > '{}' AND site_no='{}'""".format(time_string, site_no))
     points = result.get_points()
-    #influx_client.query("DROP SERIES FROM level3_temp WHERE site_no='{}';".format(site_no), method='POST')
+    if drop_old:
+        influx_client.query("DROP SERIES FROM level3 WHERE site_no='{}';".format(site_no), method='POST')
     with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
         for p in points:
             wv_corr = float(p['wv_corr'])
@@ -120,22 +126,28 @@ WHERE "time" > '{}' AND site_no='{}'""".format(time_string, site_no))
             lattice_water_g_g = this_site['lattice_water_g_g'].to_decimal()
             soil_organic_matter_g_g = this_site['soil_organic_matter_g_g'].to_decimal()
             lattice_soil_organic_sum = float(lattice_water_g_g + soil_organic_matter_g_g)
-            if wv_corr == 1.0:
-                flag = 5
-            elif corr_count > n0_cal:
-                flag = 3
-            elif corr_count < (0.4 * n0_cal):
-                flag = 2
-            else:
-                flag = int(p['level2_flag'])
             if alternate_algorithm and alternate_algorithm == "sandy":
-                a = 1216036430
-                b = -3.272
-                corrected_moist_val = a * (corr_count ** b)
+                if wv_corr == 1.0:
+                    flag = 5
+                elif corr_count > (3.0 * n0_cal):
+                     flag = 3
+                elif corr_count < (0.5 * n0_cal):
+                    flag = 2
+                else:
+                    flag = int(p['level2_flag'])
+                corrected_moist_val = sandy_a * (corr_count ** sandy_b)
             else:
+                if wv_corr == 1.0:
+                    flag = 5
+                elif corr_count > n0_cal:
+                    flag = 3
+                elif corr_count < (0.4 * n0_cal):
+                    flag = 2
+                else:
+                    flag = int(p['level2_flag'])
                 corrected_moist_val = (0.0808 / ((corr_count / n0_cal) - 0.372) - 0.115 - lattice_soil_organic_sum) * bulk_density
             #((0.0808 / ((l2.CorrCount / a.N0_Cal) - 0.372) - 0.115 - a.LatticeWater_g_g - a.SoilOrganicMatter_g_g) * a.BulkDensity) * 100
-            soil_moisture = corrected_moist_val * 100
+            soil_moisture = corrected_moist_val * 100.0
             #5.8 / ( ((a.LatticeWater_g_g + a.SoilOrganicMatter_g_g) * a.BulkDensity) + ( (0.0808 / ( (l2.CorrCount / a.N0_Cal) - 0.372) - 0.115 - a.LatticeWater_g_g - a.SoilOrganicMatter_g_g) * a.BulkDensity ) + 0.0829) AS EffectiveDepth,
             effective_depth = 5.8 / ((lattice_soil_organic_sum * bulk_density) + corrected_moist_val + 0.0829)
             json_body = {
@@ -551,10 +563,10 @@ def process_levels(site_no, options={}):
     level1_to_level2(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess)
     if do_tests:
         assert test2(site_no=site_no, start_time=start_time)
-    level2_to_level3(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess)
+    level2_to_level3(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=True)
     if do_tests:
         assert test3(site_no=site_no, start_time=start_time)
-    level3_to_level4(site_no=site_no, start_time=start_time, backprocess=backprocess)
+    level3_to_level4(site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=True)
     if do_tests:
         assert test4(site_no=site_no, start_time=start_time)
     p_end_time = datetime.now().astimezone(timezone.utc)
