@@ -379,6 +379,30 @@ WHERE "time" > '{}' AND site_no='{}';""".format(time_string, site_no))
             writer.write_point(json_body)
 
 
+def fix_raws(site_no=1):
+    result = influx_client.query("""\
+SELECT *
+FROM "raw_values"
+WHERE site_no='{}';""".format(site_no))
+    points = result.get_points()
+    bad_times = []
+    for p in points:
+        count = p['count']
+        battery = p['battery']
+        time = p['time']
+        if count is None and battery is None:
+            bad_times.append(time)
+    if len(bad_times) < 1:
+        return
+    for bad_t in bad_times:
+        del_query = """\
+DELETE FROM "raw_values"
+WHERE site_no='{}' AND time='{}';""".format(site_no, bad_t)
+        result = influx_client.query(del_query)
+        print(result)
+    return
+
+
 def test1(site_no=1, start_time=None):
     if start_time is None:
         start_time = datetime.now().astimezone(timezone.utc)
@@ -557,16 +581,17 @@ def process_levels(site_no, options={}):
     print("Starting process_levels for site {}, at {}".format(site_no, p_start_time))
     if do_tests:
         print("Doing site {} with sanity tests turned on. This takes longer.".format(site_no))
+    #fix_raws(site_no=site_no)
     raw_to_level1(site_no=site_no, start_time=start_time, backprocess=backprocess)
     if do_tests:
         assert test1(site_no=site_no, start_time=start_time)
     level1_to_level2(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess)
     if do_tests:
         assert test2(site_no=site_no, start_time=start_time)
-    level2_to_level3(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=True)
+    level2_to_level3(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=False)
     if do_tests:
         assert test3(site_no=site_no, start_time=start_time)
-    level3_to_level4(site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=True)
+    level3_to_level4(site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=False)
     if do_tests:
         assert test4(site_no=site_no, start_time=start_time)
     p_end_time = datetime.now().astimezone(timezone.utc)
