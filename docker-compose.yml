@@ -69,6 +69,8 @@ services:
       - "8098:8080"
     networks:
       - backend
+    volumes:
+      - "./cozmoz_rest_wrapper.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env"
 
 networks:
   backend:
