@@ -1,0 +1,17 @@
+[build-system]
+requires = ["poetry>=1.0.0b5"]
+build-backend = "poetry.masonry.api"
+
+[tool.poetry]
+name = "cosmoz-data-pipeline"
+description = "cosmoz data pipeline"
+version = "0.0.1"
+authors = ["Ashley Sommer <Ashley.Sommer@csiro.au>"]
+
+[tool.poetry.dependencies]
+python = "^3.6"
+# These packages are mandatory and form the core of this package’s distribution.
+python-dotenv = "^0.10.0"
+influxdb = "^5.2"
+pymongo = "^3.7"
+

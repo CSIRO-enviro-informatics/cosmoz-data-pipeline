@@ -3,6 +3,15 @@
 """utils.py"""
 from datetime import datetime, date, timedelta
 
+def do_load_dotenv():
+    if do_load_dotenv.completed:
+        return True
+    from dotenv import load_dotenv
+    load_dotenv()
+    do_load_dotenv.completed = True
+    return True
+do_load_dotenv.completed = False
+
 
 def isostring_to_datetime(iso_string):
     """

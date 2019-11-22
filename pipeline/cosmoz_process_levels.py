@@ -23,13 +23,13 @@ from datetime import time as d_time, datetime, timedelta, timezone
 from influxdb import InfluxDBClient
 from pymongo import MongoClient
 
-from influx_cached_writer import AccumCacheInfluxWriter
-from utils import datetime_to_isostring, isostring_to_datetime
-from _influx_db_config import consts as influx_config
-from _mongo_db_config import consts as mongodb_config
+from .influx_cached_writer import AccumCacheInfluxWriter
+from .utils import datetime_to_isostring, isostring_to_datetime
+from ._influx_db_config import config as influx_config
+from ._mongo_db_config import config as mongodb_config
 
 influx_client = InfluxDBClient(
-    influx_config['DB_HOST'], influx_config['DB_PORT'],
+    influx_config['DB_HOST'], int(influx_config['DB_PORT']),
     influx_config['DB_USERNAME'], influx_config['DB_PASSWORD'],
     influx_config['DB_NAME'], timeout=30)
 
@@ -574,7 +574,7 @@ def process_levels(site_no, options={}):
     start_time = options.get('start_time', None)
     backprocess = options.get('backprocess', None)
     do_tests = options.get('do_tests', False)
-    mongo_client2 = MongoClient(mongodb_config['DB_HOST'], mongodb_config['DB_PORT'])  # 27017
+    mongo_client2 = MongoClient(mongodb_config['DB_HOST'], int(mongodb_config['DB_PORT']))  # 27017
     p_start_time = datetime.now().astimezone(timezone.utc)
     if start_time is None:
         start_time = p_start_time
@@ -620,7 +620,7 @@ def process_levels(site_no, options={}):
 #     print("Finished process_levels for All Sites at {}".format(end_time))
 #     print("All sites process_levels took {}".format((end_time-start_time)))
 
-if __name__ == "__main__":
+def main():
     start_time = datetime.now().astimezone(timezone.utc)
     parser = argparse.ArgumentParser(description='Run the processing levels on the cosmoz influxdb.')
 
@@ -654,10 +654,10 @@ if __name__ == "__main__":
                 backprocess = ONE_YEAR
             else:
                 fromdatetime = isostring_to_datetime(fromdatetime)
-            backprocess = start_time - fromdatetime
+                backprocess = start_time - fromdatetime
         if backprocess.days < 0:
             raise RuntimeError("Cannot backprocess negative time. Ensure it is positive.")
-        mongo_client = MongoClient(mongodb_config['DB_HOST'], mongodb_config['DB_PORT'])  # 27017
+        mongo_client = MongoClient(mongodb_config['DB_HOST'], int(mongodb_config['DB_PORT']))  # 27017
         mdb = getattr(mongo_client, mongodb_config['DB_NAME'])
         all_sites = mdb.all_sites
         all_stations_docs = mdb.all_stations
@@ -680,3 +680,5 @@ if __name__ == "__main__":
     finally:
         outfile.close()
 
+if __name__ == "__main__":
+    main()

@@ -17,12 +17,12 @@ limitations under the License.
 """
 import csv
 from influxdb import InfluxDBClient
-from influx_cached_writer import AccumCacheInfluxWriter
-from _influx_db_config import consts as influx_config
-from utils import sql_to_isostring
+from .influx_cached_writer import AccumCacheInfluxWriter
+from ._influx_db_config import config as influx_config
+from .utils import sql_to_isostring
 
 influx_client = InfluxDBClient(
-    influx_config['DB_HOST'], influx_config['DB_PORT'],
+    influx_config['DB_HOST'], int(influx_config['DB_PORT']),
     influx_config['DB_USERNAME'], influx_config['DB_PASSWORD'],
     influx_config['DB_NAME'], timeout=30)
 

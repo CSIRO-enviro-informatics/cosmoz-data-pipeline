@@ -1,5 +1,19 @@
-version: "3.4"
+version: "3.5"
 services:
+
+  scheduler:
+    image: mcuadros/ofelia
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - backend
+    depends_on:
+      - email_downloader
+      - cosmoz.application
+    labels:
+      ofelia.job-local.my-sch-job.schedule: "@hourly"
+      ofelia.job-local.my-sch-job.command: "echo 'ofelia still running'"
+    command: ["daemon", "--docker"]
 
   cosmoz.influxdb:
     image: influxdb:1.7-alpine
@@ -19,7 +33,7 @@ services:
     environment:
       - INFLUX_DB=cosmoz
     command: ["influxd", "-config", "/etc/influxdb/influxdb.conf"]
-  
+
   cosmoz.mongodb:
     image: mvertes/alpine-mongo:latest
     #ports:
@@ -40,7 +54,7 @@ services:
       - MONGODB_IP="0.0.0.0"
       - MONGODB_OPTIONS="--journal"
 
-  
+
   visualizer:
     image: chronograf:1.7-alpine
     depends_on:
@@ -55,6 +69,27 @@ services:
       - "/etc/timezone:/etc/timezone:ro"
     command: ["chronograf", "--influxdb-url=http://cosmoz.influxdb:8086"]
 
+  email_downloader:
+    image: docker-registry.it.csiro.au/tern-landscapes/cosmoz-email-downloader:v001
+    volumes:
+      - "email-downloader-res:/root/src/res"
+      - "./email_downloader.env:/root/src/.env:ro"
+    hostname: "cosmoz.email.downloader"
+    depends_on:
+      - cosmoz.influxdb
+      - cosmoz.mongodb
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+    networks:
+      - backend
+    command: ["tail", "-f", "/dev/null"]  # By default, this does nothing. It gets scheduled
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.emails-cloud-ingest.no-overlap: "true"
+      ofelia.job-exec.emails-cloud-ingest.schedule: "@hourly"
+      ofelia.job-exec.emails-cloud-ingest.command: "/bin/sh -c 'source ./venv/bin/activate && python3 main.py C -s -d 10'"
+
+
   cosmoz.application:
     image: cosmoz/app-rest
     build:
@@ -62,6 +97,8 @@ services:
       context: .
       network: host
     hostname: "cosmoz.application"
+    environment:
+      - PYTHONUNBUFFERED=TRUE
     depends_on:
       - cosmoz.influxdb
       - cosmoz.mongodb
@@ -70,11 +107,18 @@ services:
     networks:
       - backend
     volumes:
-      - "./cozmoz_rest_wrapper.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env"
+      - "./cozmoz_rest_wrapper.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env:ro"
+      - "./app_scripts.env:/usr/local/lib/cosmoz-data-pipeline/pipeline/.env:ro"
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.process-levels.no-overlap: "true"
+      ofelia.job-exec.process-levels.schedule: "@every 2m"
+      ofelia.job-exec.process-levels.command: "cd /usr/local/lib/cozmoz-data-pipeline && bash process_levels.sh"
+
 
 networks:
   backend:
-      
+
 volumes:
   timeseriesdb-data:
     driver_opts:
@@ -85,4 +129,10 @@ volumes:
     driver_opts:
       type: none
       device: "${PWD}/mgdb"
+      o: bind
+  email-downloader-res:
+    driver: local
+    driver_opts:
+      type: none
+      device: "$PWD/$HOST_EMAIL_DOWNLOADER_RES_DIR"
       o: bind

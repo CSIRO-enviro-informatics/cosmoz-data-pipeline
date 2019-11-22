@@ -22,10 +22,10 @@ import datetime
 from urllib import request
 from bson import Decimal128
 from pymongo import MongoClient
-from _mongo_db_config import consts as mongodb_config
-from utils import isostring_to_datetime, sql_to_isostring
+from ._mongo_db_config import config as mongodb_config
+from .utils import isostring_to_datetime, sql_to_isostring
 
-client = MongoClient(mongodb_config['DB_HOST'], mongodb_config['DB_PORT'])  # 27017
+client = MongoClient(mongodb_config['DB_HOST'], int(mongodb_config['DB_PORT']))  # 27017
 
 def all_stations():
     db = getattr(client, mongodb_config['DB_NAME'])
