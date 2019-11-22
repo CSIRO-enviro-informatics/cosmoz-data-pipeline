@@ -8,6 +8,7 @@ RUN echo 'https://dl-3.alpinelinux.org/alpine/v3.9/main' >> /etc/apk/repositorie
 RUN echo 'https://dl-3.alpinelinux.org/alpine/v3.9/community' >> /etc/apk/repositories
 RUN apk add --no-cache bash tini-static python3 py3-virtualenv libuv libstdc++ freetds curl
 RUN apk add --no-cache --virtual buildenv git libuv-dev freetds-dev python3-dev build-base
+RUN ln -s /usr/bin/python3 /usr/bin/python
 WORKDIR /usr/local/lib
 RUN git clone https://github.com/CSIRO-enviro-informatics/cosmoz-rest-wrapper.git
 RUN git clone https://github.com/CSIRO-enviro-informatics/cosmoz-data-pipeline.git
@@ -28,7 +29,7 @@ RUN virtualenv -p python3 venv
 RUN source ./venv/bin/activate &&\
     pip3 install -r requirements.txt &&\
     pip3 install --upgrade git+git://github.com/esnme/ultrajson.git#egg=ujson &&\
-    pip3 install gunicorn &&\
+    pip3 install "gunicorn<20.0" &&\
     deactivate
 RUN apk del buildenv
 ENTRYPOINT ["/sbin/tini-static", "--"]
