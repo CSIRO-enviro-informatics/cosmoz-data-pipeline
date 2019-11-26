@@ -4,8 +4,8 @@ ENV MONGODB_HOST=localhost
 ENV MONGODB_PORT=27017
 ENV INFLUXDB_HOST=localhost
 ENV INFLUXDB_PORT=8086
-RUN echo 'https://dl-3.alpinelinux.org/alpine/v3.9/main' >> /etc/apk/repositories
-RUN echo 'https://dl-3.alpinelinux.org/alpine/v3.9/community' >> /etc/apk/repositories
+RUN echo "https://dl-3.alpinelinux.org/alpine/v3.9/main" >> /etc/apk/repositories
+RUN echo "https://dl-3.alpinelinux.org/alpine/v3.9/community" >> /etc/apk/repositories
 RUN apk add --no-cache bash tini-static python3 py3-virtualenv libuv libstdc++ freetds curl
 RUN apk add --no-cache --virtual buildenv git libuv-dev freetds-dev python3-dev build-base
 RUN ln -s /usr/bin/python3 /usr/bin/python

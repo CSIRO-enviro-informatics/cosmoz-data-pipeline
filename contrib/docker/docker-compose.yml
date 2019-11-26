@@ -4,12 +4,16 @@ services:
   scheduler:
     image: mcuadros/ofelia
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
     networks:
       - backend
     depends_on:
       - cosmoz.email.downloader
-      - cosmoz.application
+      - cosmoz.pipeline.application
+      - cosmoz.backup.influxdb
+      - cosmoz.backup.mongodb
     labels:
       ofelia.job-local.my-sch-job.schedule: "@hourly"
       ofelia.job-local.my-sch-job.command: "echo 'ofelia still running'"
@@ -26,13 +30,36 @@ services:
     volumes:
       # The /var/lib/influxdb dir has subdirs {data, meta, wal} all need to be persisted.
       - timeseriesdb-data:/var/lib/influxdb
-      - "./influxdb.conf:/etc/influxdb/influxdb.conf"
+      - "${PWD}/../../influxdb.conf:/etc/influxdb/influxdb.conf"
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "/etc/localtime:/etc/localtime:ro"
       - "/etc/timezone:/etc/timezone:ro"
     environment:
       - INFLUX_DB=cosmoz
     command: ["influxd", "-config", "/etc/influxdb/influxdb.conf"]
+
+  cosmoz.backup.influxdb:
+    image: influxdb:1.7-alpine
+    networks:
+      - backend
+    hostname: "cosmoz.backup.influxdb"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+      - "timeseriesdb-backup:/influx_backup"
+    environment:
+      - INFLUX_DB=cosmoz
+    depends_on:
+      - cosmoz.influxdb
+    #command: ["influxd", "backup", "-portable", "-host", "cosmoz.influxdb:8088", "/influx_backup"]
+    #command: "sh -c 'sleep 30 && influxd backup -portable -host cosmoz.influxdb:8088 /influx_backup'"
+    command: ["tail", "-f", "/dev/null"]  # By default, this does nothing. It gets scheduled
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.influx-db-backup.no-overlap: "true"
+      ofelia.job-exec.influx-db-backup.schedule: "0 0 23 * * *" #Daily at 11pm.
+      #ofelia.job-exec.influx-db-backup.schedule: "@every 1m"
+      ofelia.job-exec.influx-db-backup.command: "influxd backup -portable -host cosmoz.influxdb:8088 /influx_backup"
 
   cosmoz.mongodb:
     image: mvertes/alpine-mongo:latest
@@ -54,26 +81,49 @@ services:
       - MONGODB_IP="0.0.0.0"
       - MONGODB_OPTIONS="--journal"
 
-
-  visualizer:
-    image: chronograf:1.7-alpine
-    depends_on:
-      - cosmoz.influxdb
-    #ports:
-    #  - "8888:8888"
+  cosmoz.backup.mongodb:
+    image: cashstory/mongodump:latest
     networks:
       - backend
+    hostname: "cosmoz.backup.mongodb"
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
       - "/etc/localtime:/etc/localtime:ro"
       - "/etc/timezone:/etc/timezone:ro"
-    command: ["chronograf", "--influxdb-url=http://cosmoz.influxdb:8086"]
+      - "documentdb-backup:/dump"
+    depends_on:
+      - cosmoz.mongodb
+    environment:
+      - "TZ="
+    entrypoint: [] #Leave this empty to override the special entrypoint in cashstory/mongodump
+    #command: "bash -c 'sleep 30 && mongodump -v --host=cosmoz.mongodb:27017 --gzip --out=/dump/`date -I`/'"
+    command: ["tail", "-f", "/dev/null"]  # By default, this does nothing. It gets scheduled
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.mongodb-db-backup.no-overlap: "true"
+      ofelia.job-exec.mongodb-db-backup.schedule: "0 0 22 * * *" #Daily at 10pm.
+      #ofelia.job-exec.mongodb-db-backup.schedule: "@every 1m"
+      ofelia.job-exec.mongodb-db-backup.command: "bash -c 'mongodump -v --host=cosmoz.mongodb:27017 --gzip --out=/dump/`date -I`/'"
+
+#  We're not using the visualizer in prod anymore.
+#  visualizer:
+#    image: chronograf:1.7-alpine
+#    depends_on:
+#      - cosmoz.influxdb
+#    #ports:
+#    #  - "8888:8888"
+#    networks:
+#      - backend
+#    volumes:
+#      - "/var/run/docker.sock:/var/run/docker.sock"
+#      - "/etc/localtime:/etc/localtime:ro"
+#      - "/etc/timezone:/etc/timezone:ro"
+#    command: ["chronograf", "--influxdb-url=http://cosmoz.influxdb:8086"]
 
   cosmoz.email.downloader:
     image: docker-registry.it.csiro.au/tern-landscapes/cosmoz-email-downloader:v001
     volumes:
       - "email-downloader-res:/root/src/res"
-      - "./email_downloader.env:/root/src/.env"
+      - "${PWD}/../../email_downloader.env:/root/src/.env"
     hostname: "cosmoz.email.downloader"
     depends_on:
       - cosmoz.influxdb
@@ -89,13 +139,9 @@ services:
       ofelia.job-exec.emails-cloud-ingest.schedule: "0 30 * * * *" #Hourly at *:30.
       ofelia.job-exec.emails-cloud-ingest.command: "sh -c 'source ./venv/bin/activate && python3 main.py C -d 1'"
 
-  cosmoz.application:
-    image: cosmoz/app-rest
-    build:
-      dockerfile: ./Dockerfile
-      context: .
-      network: host
-    hostname: "cosmoz.application"
+  cosmoz.pipeline.application:
+    image: docker-registry.it.csiro.au/tern-landscapes/cosmoz-pipeline-application:v001
+    hostname: "cosmoz.pipeline.application"
     environment:
       - PYTHONUNBUFFERED=TRUE
     depends_on:
@@ -106,8 +152,8 @@ services:
     networks:
       - backend
     volumes:
-      - "./cosmoz_rest_wrapper.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env"
-      - "./app_scripts.env:/usr/local/lib/cosmoz-data-pipeline/.env"
+      - "${PWD}/../../cosmoz_rest_wrapper.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env"
+      - "${PWD}/../../app_scripts.env:/usr/local/lib/cosmoz-data-pipeline/.env"
     labels:
       ofelia.enabled: "true"
       ofelia.job-exec.process-levels.no-overlap: "true"
@@ -125,12 +171,22 @@ volumes:
   timeseriesdb-data:
     driver_opts:
       type: none
-      device: "${PWD}/tsdb"
+      device: "${PWD}/$HOST_INFLUXDB_DATA_DIR"
+      o: bind
+  timeseriesdb-backup:
+    driver_opts:
+      type: none
+      device: "${PWD}/$HOST_INFLUXDB_BACKUP_DIR"
       o: bind
   documentdb-data:
     driver_opts:
       type: none
-      device: "${PWD}/mgdb"
+      device: "${PWD}/$HOST_MONGODB_DATA_DIR"
+      o: bind
+  documentdb-backup:
+    driver_opts:
+      type: none
+      device: "${PWD}/$HOST_MONGODB_BACKUP_DIR"
       o: bind
   email-downloader-res:
     driver: local

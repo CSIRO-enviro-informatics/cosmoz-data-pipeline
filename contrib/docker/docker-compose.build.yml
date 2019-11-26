@@ -1,0 +1,14 @@
+version: "3.6"
+# Requires docker-compose min version 1.22
+# (for complex labels, and for $PWD in dockerfile:)
+services:
+
+  cosmoz.pipeline.application:
+    image: docker-registry.it.csiro.au/tern-landscapes/cosmoz-pipeline-application:v001
+    build:
+      dockerfile: "${PWD}/Dockerfiles/pipeline.Dockerfile"
+      context: ../../
+      network: host
+    hostname: "cosmoz.pipeline.application"
+    environment:
+      - PYTHONUNBUFFERED=TRUE

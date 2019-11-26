@@ -13,4 +13,6 @@ scripts/venv/
 *.wt
 *.lock
 scripts/*.csv
-
+/cosmoz_influx_backup/
+/cosmoz_mongo_backup/
+/contrib/docker/
