@@ -23,7 +23,6 @@ RUN source ./venv/bin/activate &&\
     pip3 install --upgrade cython &&\
     poetry install --no-root &&\
     deactivate
-WORKDIR /usr/local/lib/cosmoz-data-pipeline/pipeline
 WORKDIR /usr/local/lib/cosmoz-rest-wrapper
 RUN virtualenv -p python3 venv
 RUN source ./venv/bin/activate &&\

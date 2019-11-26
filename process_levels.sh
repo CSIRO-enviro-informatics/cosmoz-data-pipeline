@@ -3,6 +3,8 @@
 source ./venv/bin/activate
 PYTHONUNBUFFERED=1
 export PYTHONUNBUFFERED
+
+#Uncomment these to process to soils-discovery rather than in the container.
 #export INFLUX_DB_HOST=soils-discovery.it.csiro.au
 #export INFLUX_DB_PORT=8186
 #export MONGO_DB_HOST=soils-discovery.it.csiro.au
@@ -12,6 +14,8 @@ export PYTHONUNBUFFERED
 PROCESS_DAYS=31
 exec python3 - -d $PROCESS_DAYS <<'____HERE'
 import sys
+from datetime import datetime
 from pipeline import cosmoz_process_levels
+print("started process_levels.sh at {} local time".format(str(datetime.now())))
 sys.exit(cosmoz_process_levels.main())
 ____HERE

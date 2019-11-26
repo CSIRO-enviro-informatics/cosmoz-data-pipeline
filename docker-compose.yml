@@ -1,4 +1,4 @@
-version: "3.5"
+version: "3.6"
 services:
 
   scheduler:
@@ -8,7 +8,7 @@ services:
     networks:
       - backend
     depends_on:
-      - email_downloader
+      - cosmoz.email.downloader
       - cosmoz.application
     labels:
       ofelia.job-local.my-sch-job.schedule: "@hourly"
@@ -69,11 +69,11 @@ services:
       - "/etc/timezone:/etc/timezone:ro"
     command: ["chronograf", "--influxdb-url=http://cosmoz.influxdb:8086"]
 
-  email_downloader:
+  cosmoz.email.downloader:
     image: docker-registry.it.csiro.au/tern-landscapes/cosmoz-email-downloader:v001
     volumes:
       - "email-downloader-res:/root/src/res"
-      - "./email_downloader.env:/root/src/.env:ro"
+      - "./email_downloader.env:/root/src/.env"
     hostname: "cosmoz.email.downloader"
     depends_on:
       - cosmoz.influxdb
@@ -86,9 +86,8 @@ services:
     labels:
       ofelia.enabled: "true"
       ofelia.job-exec.emails-cloud-ingest.no-overlap: "true"
-      ofelia.job-exec.emails-cloud-ingest.schedule: "@hourly"
-      ofelia.job-exec.emails-cloud-ingest.command: "/bin/sh -c 'source ./venv/bin/activate && python3 main.py C -s -d 10'"
-
+      ofelia.job-exec.emails-cloud-ingest.schedule: "0 30 * * * *" #Hourly at *:30.
+      ofelia.job-exec.emails-cloud-ingest.command: "sh -c 'source ./venv/bin/activate && python3 main.py C -d 1'"
 
   cosmoz.application:
     image: cosmoz/app-rest
@@ -107,13 +106,16 @@ services:
     networks:
       - backend
     volumes:
-      - "./cozmoz_rest_wrapper.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env:ro"
-      - "./app_scripts.env:/usr/local/lib/cosmoz-data-pipeline/pipeline/.env:ro"
+      - "./cosmoz_rest_wrapper.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env"
+      - "./app_scripts.env:/usr/local/lib/cosmoz-data-pipeline/.env"
     labels:
       ofelia.enabled: "true"
       ofelia.job-exec.process-levels.no-overlap: "true"
-      ofelia.job-exec.process-levels.schedule: "@every 2m"
-      ofelia.job-exec.process-levels.command: "cd /usr/local/lib/cozmoz-data-pipeline && bash process_levels.sh"
+      ofelia.job-exec.process-levels.schedule: "0 0 2 * * *"  # Daily 2am
+      ofelia.job-exec.process-levels.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash process_levels.sh'"
+      ofelia.job-exec.get-nmdb-intensities.no-overlap: "true"
+      ofelia.job-exec.get-nmdb-intensities.schedule: "0 0 1 * * *"  # Daily 1am
+      ofelia.job-exec.get-nmdb-intensities.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash get_nmdb_intensities.sh'"
 
 
 networks:
@@ -134,5 +136,5 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: "$PWD/$HOST_EMAIL_DOWNLOADER_RES_DIR"
+      device: "${PWD}/$HOST_EMAIL_DOWNLOADER_RES_DIR"
       o: bind
