@@ -15,6 +15,7 @@ services:
       - cosmoz.backup.influxdb
       - cosmoz.backup.mongodb
     labels:
+      ofelia.isolate-compose-project: "${COMPOSE_PROJECT_NAME}"
       ofelia.job-local.my-sch-job.schedule: "@hourly"
       ofelia.job-local.my-sch-job.command: "echo 'ofelia still running'"
     command: ["daemon", "--docker"]
@@ -57,7 +58,7 @@ services:
     labels:
       ofelia.enabled: "true"
       ofelia.job-exec.influx-db-backup.no-overlap: "true"
-      ofelia.job-exec.influx-db-backup.schedule: "0 0 23 * * *" #Daily at 11pm.
+      ofelia.job-exec.influx-db-backup.schedule: "0 0 23 * * 5" # Every Friday at 11pm.
       #ofelia.job-exec.influx-db-backup.schedule: "@every 1m"
       ofelia.job-exec.influx-db-backup.command: "influxd backup -portable -host cosmoz.influxdb:8088 /influx_backup"
 
@@ -100,7 +101,7 @@ services:
     labels:
       ofelia.enabled: "true"
       ofelia.job-exec.mongodb-db-backup.no-overlap: "true"
-      ofelia.job-exec.mongodb-db-backup.schedule: "0 0 22 * * *" #Daily at 10pm.
+      ofelia.job-exec.mongodb-db-backup.schedule: "0 0 22 * * 5" # Every Friday at 10pm.
       #ofelia.job-exec.mongodb-db-backup.schedule: "@every 1m"
       ofelia.job-exec.mongodb-db-backup.command: "bash -c 'mongodump -v --host=cosmoz.mongodb:27017 --gzip --out=/dump/`date -I`/'"
 

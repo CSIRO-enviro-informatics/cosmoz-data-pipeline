@@ -20,18 +20,18 @@ ENV PATH="/root/.poetry/bin:${PATH}"
 RUN poetry self:update --preview
 RUN python3 -m virtualenv -p /usr/bin/python3 --system-site-packages venv
 RUN source ./venv/bin/activate &&\
-    pip3 install --upgrade cython &&\
+    poetry run pip3 install --upgrade cython &&\
     poetry install --no-root &&\
     deactivate
 WORKDIR /usr/local/lib/cosmoz-rest-wrapper
-RUN virtualenv -p python3 venv
+RUN python3 -m virtualenv -p /usr/bin/python3 --system-site-packages venv
 RUN source ./venv/bin/activate &&\
-    pip3 install -r requirements.txt &&\
-    pip3 install --upgrade git+git://github.com/esnme/ultrajson.git#egg=ujson &&\
-    pip3 install "gunicorn<20.0" &&\
+    poetry install --no-root &&\
+    poetry run pip3 install --upgrade git+git://github.com/esnme/ultrajson.git#egg=ujson &&\
+    poetry run pip3 install "gunicorn<20.0" &&\
     deactivate
 RUN apk del buildenv
 ENTRYPOINT ["/sbin/tini-static", "--"]
 CMD source ./venv/bin/activate &&\
     cd src && MY_CURRENT_IP="$(ip addr|awk -F'[ \n\t/]+' '/global/ { print $3 }')" &&\
-    gunicorn app:app --bind "$MY_CURRENT_IP":"$REST_API_INTERNAL_PORT" --reuse-port --worker-class sanic.worker.GunicornWorker
+    poetry run gunicorn app:app --bind "$MY_CURRENT_IP":"$REST_API_INTERNAL_PORT" --reuse-port --worker-class sanic.worker.GunicornWorker
