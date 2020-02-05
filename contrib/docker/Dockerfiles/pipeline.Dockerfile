@@ -17,7 +17,7 @@ RUN curl -L -o ./get-poetry.py https://raw.githubusercontent.com/sdispater/poetr
 RUN chmod +x ./get-poetry.py
 RUN python3 ./get-poetry.py
 ENV PATH="/root/.poetry/bin:${PATH}"
-RUN poetry self:update --preview
+RUN poetry self update
 RUN python3 -m virtualenv -p /usr/bin/python3 --system-site-packages venv
 RUN source ./venv/bin/activate &&\
     poetry run pip3 install --upgrade cython &&\
