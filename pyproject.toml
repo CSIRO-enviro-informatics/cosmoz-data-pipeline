@@ -1,5 +1,5 @@
 [build-system]
-requires = ["poetry>=1.0.0b8"]
+requires = ["poetry>=1.0.1"]
 build-backend = "poetry.masonry.api"
 
 [tool.poetry]
@@ -15,4 +15,3 @@ python-dotenv = "^0.10.0"
 influxdb = "^5.2"
 pymongo = "^3.7"
 requests = "^2.17"
-
