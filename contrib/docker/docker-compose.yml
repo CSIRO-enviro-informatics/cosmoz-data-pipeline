@@ -145,6 +145,12 @@ services:
     hostname: "cosmoz.pipeline.application"
     environment:
       - PYTHONUNBUFFERED=TRUE
+      - MONGODB_HOST=cosmoz.mongodb
+      - MONGODB_PORT=27017
+      - INFLUXDB_HOST=cosmoz.influxdb
+      - INFLUXDB_PORT=8086
+      - METRICS_DIRECTORY=/usr/local/lib/cosmoz-rest-wrapper/metrics
+      - SANIC_PROXIES_COUNT=1
     depends_on:
       - cosmoz.influxdb
       - cosmoz.mongodb
@@ -153,6 +159,7 @@ services:
     networks:
       - backend
     volumes:
+      - "${PWD}/../../metrics:/usr/local/lib/cosmoz-rest-wrapper/metrics"
       - "${PWD}/../../cosmoz_rest_wrapper.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env"
       - "${PWD}/../../app_scripts.env:/usr/local/lib/cosmoz-data-pipeline/.env"
     labels:
