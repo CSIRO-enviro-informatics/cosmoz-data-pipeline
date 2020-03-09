@@ -2,7 +2,8 @@ version: "3.6"
 services:
 
   scheduler:
-    image: mcuadros/ofelia
+    #image: mcuadros/ofelia
+    image: docker-registry.it.csiro.au/tern-landscapes/pyofelia:latest
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "/etc/localtime:/etc/localtime:ro"
@@ -15,7 +16,6 @@ services:
       - cosmoz.backup.influxdb
       - cosmoz.backup.mongodb
     labels:
-      ofelia.isolate-compose-project: "${COMPOSE_PROJECT_NAME}"
       ofelia.job-local.my-sch-job.schedule: "@hourly"
       ofelia.job-local.my-sch-job.command: "echo 'ofelia still running'"
     command: ["daemon", "--docker"]
@@ -57,9 +57,8 @@ services:
     command: ["tail", "-f", "/dev/null"]  # By default, this does nothing. It gets scheduled
     labels:
       ofelia.enabled: "true"
-      ofelia.job-exec.influx-db-backup.no-overlap: "true"
-      ofelia.job-exec.influx-db-backup.schedule: "0 0 23 * * 5" # Every Friday at 11pm.
-      #ofelia.job-exec.influx-db-backup.schedule: "@every 1m"
+      #ofelia.job-exec.influx-db-backup.no-overlap: "true"
+      ofelia.job-exec.influx-db-backup.schedule: "0 23 * * 5" # Every Friday at 11pm.
       ofelia.job-exec.influx-db-backup.command: "influxd backup -portable -host cosmoz.influxdb:8088 /influx_backup"
 
   cosmoz.mongodb:
@@ -100,25 +99,9 @@ services:
     command: ["tail", "-f", "/dev/null"]  # By default, this does nothing. It gets scheduled
     labels:
       ofelia.enabled: "true"
-      ofelia.job-exec.mongodb-db-backup.no-overlap: "true"
-      ofelia.job-exec.mongodb-db-backup.schedule: "0 0 22 * * 5" # Every Friday at 10pm.
-      #ofelia.job-exec.mongodb-db-backup.schedule: "@every 1m"
+      #ofelia.job-exec.mongodb-db-backup.no-overlap: "true"
+      ofelia.job-exec.mongodb-db-backup.schedule: "0 22 * * 5" # Every Friday at 10pm.
       ofelia.job-exec.mongodb-db-backup.command: "bash -c 'mongodump -v --host=cosmoz.mongodb:27017 --gzip --out=/dump/`date -I`/'"
-
-#  We're not using the visualizer in prod anymore.
-#  visualizer:
-#    image: chronograf:1.7-alpine
-#    depends_on:
-#      - cosmoz.influxdb
-#    #ports:
-#    #  - "8888:8888"
-#    networks:
-#      - backend
-#    volumes:
-#      - "/var/run/docker.sock:/var/run/docker.sock"
-#      - "/etc/localtime:/etc/localtime:ro"
-#      - "/etc/timezone:/etc/timezone:ro"
-#    command: ["chronograf", "--influxdb-url=http://cosmoz.influxdb:8086"]
 
   cosmoz.email.downloader:
     image: docker-registry.it.csiro.au/tern-landscapes/cosmoz-email-downloader:v001
@@ -136,8 +119,8 @@ services:
     command: ["tail", "-f", "/dev/null"]  # By default, this does nothing. It gets scheduled
     labels:
       ofelia.enabled: "true"
-      ofelia.job-exec.emails-cloud-ingest.no-overlap: "true"
-      ofelia.job-exec.emails-cloud-ingest.schedule: "0 30 * * * *" #Hourly at *:30.
+      #ofelia.job-exec.emails-cloud-ingest.no-overlap: "true"
+      ofelia.job-exec.emails-cloud-ingest.schedule: "30 * * * *" #Hourly at *:30.
       ofelia.job-exec.emails-cloud-ingest.command: "sh -c 'source ./.venv/bin/activate && python3 main.py C -d 1'"
 
   cosmoz.pipeline.application:
@@ -164,11 +147,11 @@ services:
       - "${PWD}/../../app_scripts.env:/usr/local/lib/cosmoz-data-pipeline/.env"
     labels:
       ofelia.enabled: "true"
-      ofelia.job-exec.process-levels.no-overlap: "true"
-      ofelia.job-exec.process-levels.schedule: "0 0 2 * * *"  # Daily 2am
+      #ofelia.job-exec.process-levels.no-overlap: "true"
+      ofelia.job-exec.process-levels.schedule: "0 2,14 * * *"  # Daily 2am and 2pm
       ofelia.job-exec.process-levels.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash process_levels.sh'"
       ofelia.job-exec.get-nmdb-intensities.no-overlap: "true"
-      ofelia.job-exec.get-nmdb-intensities.schedule: "0 0 1 * * *"  # Daily 1am
+      ofelia.job-exec.get-nmdb-intensities.schedule: "0 1,13 * * *"  # Daily 1am and 2pm
       ofelia.job-exec.get-nmdb-intensities.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash get_nmdb_intensities.sh'"
 
 

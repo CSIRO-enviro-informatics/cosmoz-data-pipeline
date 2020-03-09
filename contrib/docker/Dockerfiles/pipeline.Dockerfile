@@ -13,7 +13,7 @@ RUN patchelf --add-needed libgcompat.so.0 /usr/bin/python3.6
 RUN pip3 install --upgrade "pip>=19.0.2"
 RUN pip3 install --upgrade cython "setuptools>=40.8" "poetry>=1.0.3"
 RUN echo 'manylinux1_compatible = True' > /usr/lib/python3.6/_manylinux.py &&\
-    pip3 install "orjson==2.5.1" &&\
+    pip3 install "orjson==2.5.2" &&\
     rm /usr/lib/python3.6/_manylinux.py
 WORKDIR /usr/local/lib
 RUN git clone https://github.com/CSIRO-enviro-informatics/cosmoz-rest-wrapper.git
@@ -35,4 +35,4 @@ RUN apk del buildenv
 ENTRYPOINT ["/sbin/tini-static", "--"]
 CMD source ./.venv/bin/activate &&\
     cd src && MY_CURRENT_IP="$(ip addr|awk -F'[ \n\t/]+' '/global/ { print $3 }')" &&\
-    poetry run gunicorn app:app --bind "$MY_CURRENT_IP":"$REST_API_INTERNAL_PORT" --reuse-port --worker-class sanic.worker.GunicornWorker
+    poetry run gunicorn app:app --bind "$MY_CURRENT_IP":"$REST_API_INTERNAL_PORT" --forwarded-allow-ips="*" --reuse-port --worker-class sanic.worker.GunicornWorker
