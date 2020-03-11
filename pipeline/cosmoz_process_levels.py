@@ -667,16 +667,27 @@ def main():
         else:
             all_stations = all_stations_docs.find({}, {'site_no': 1})
         mongo_client.close()
-        processes = []
-        printout("Using multiprocessing")
-        pool = Pool(None)  # uses os.cpu_count
-        with pool as p:
-            worker_options = {'start_time': start_time, 'do_tests': False, 'backprocess': backprocess}
-            worker_args = [(s['site_no'], worker_options) for s in all_stations]
-            p.starmap(process_levels, worker_args)
-        end_time = datetime.now().astimezone(timezone.utc)
-        printout("Finished process_levels for All Sites at {}".format(end_time))
-        printout("All sites process_levels took {}".format((end_time - start_time)))
+        worker_options = {'start_time': start_time, 'do_tests': False, 'backprocess': backprocess}
+        all_stations = list(all_stations) #This turns a the mongo cursor into a python list
+        if len(all_stations) < 1:
+            printout("No stations to process.")
+            return
+        elif len(all_stations) < 2:
+            printout("Only doing station {}".format(siteno))
+            process_levels(siteno, worker_options)
+            end_time = datetime.now().astimezone(timezone.utc)
+            printout("Finished process_levels for site {} at {}".format(siteno, end_time))
+            printout("process_levels took {}".format((end_time - start_time)))
+        else:
+            printout("Using multiprocessing")
+            processes = []
+            pool = Pool(None)  # uses os.cpu_count
+            with pool as p:
+                worker_args = [(s['site_no'], worker_options) for s in all_stations]
+                p.starmap(process_levels, worker_args)
+            end_time = datetime.now().astimezone(timezone.utc)
+            printout("Finished process_levels for All Sites at {}".format(end_time))
+            printout("All sites process_levels took {}".format((end_time - start_time)))
     finally:
         outfile.close()
 
