@@ -1,6 +1,6 @@
 #!/bin/bash
 # Pulls down latest NMDB Intensities, puts them in the influxDB
-source ./venv/bin/activate
+source ./.venv/bin/activate
 PYTHONUNBUFFERED=1
 export PYTHONUNBUFFERED
 
