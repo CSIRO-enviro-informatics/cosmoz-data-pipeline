@@ -150,9 +150,12 @@ services:
       #ofelia.job-exec.process-levels.no-overlap: "true"
       ofelia.job-exec.process-levels.schedule: "0 2,14 * * *"  # Daily 2am and 2pm
       ofelia.job-exec.process-levels.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash process_levels.sh'"
-      ofelia.job-exec.get-nmdb-intensities.no-overlap: "true"
+      #ofelia.job-exec.get-nmdb-intensities.no-overlap: "true"
       ofelia.job-exec.get-nmdb-intensities.schedule: "0 1,13 * * *"  # Daily 1am and 2pm
       ofelia.job-exec.get-nmdb-intensities.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash get_nmdb_intensities.sh'"
+      #ofelia.job-exec.upload-metrics.no-overlap: "true"
+      ofelia.job-exec.upload-metrics.schedule: "30 0 * * *"  # Daily 12.30am
+      ofelia.job-exec.upload-metrics.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash upload_metrics.sh'"
 
 
 networks:
