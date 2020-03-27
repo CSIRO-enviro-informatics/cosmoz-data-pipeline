@@ -1,6 +1,6 @@
 #!/bin/bash
 # Push metrics up to the stats server
-SCRIPTS_ENV_FILE = ${SCRIPTS_ENV_FILE:-./.env}
+SCRIPTS_ENV_FILE=${SCRIPTS_ENV_FILE:-./.env}
 METRICS_DIRECTORY=${METRICS_DIRECTORY:-/usr/local/lib/cosmoz-rest-wrapper/metrics}
 METRICS_UPLOADKEY=${METRICS_UPLOADKEY:-nokey}
 METRICS_UPLOADENDPOINT="${METRICS_UPLOADENDPOINT:-http://lw-94-cdc.it.csiro.au:3001/api/upload}"
@@ -25,8 +25,8 @@ for f in ./*.txt; do
   if gzip -k9 "$f" ; then
     echo "gzipped $f ready to upload"
   else
-    echo "could not gzip $f, exiting"
-    exit 1
+    echo "could not gzip $f, skipping"
+    continue
   fi
   if mv "$f" ./archive ; then
     echo "moved $f to archive dir"
