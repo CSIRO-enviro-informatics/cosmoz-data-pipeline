@@ -22,7 +22,7 @@ else
 fi
 
 for f in ./*.txt; do
-  if gzip --rsyncable -k9 "$f" ; then
+  if gzip -k9 "$f" ; then
     echo "gzipped $f ready to upload"
   else
     echo "could not gzip $f, exiting"
