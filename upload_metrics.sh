@@ -61,7 +61,7 @@ else
   exit 1
 fi
 
-if tar -czf "metrics_$TIME.tar.gz" ./* ; then
+if tar -czf "metrics_$TIME.tar.gz" ./*.txt ; then
   echo "Compressed archive logs successfully."
   rm -f ./*.txt
 else
