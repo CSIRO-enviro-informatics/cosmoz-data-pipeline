@@ -3,7 +3,7 @@
 SCRIPTS_ENV_FILE=${SCRIPTS_ENV_FILE:-./.env}
 METRICS_DIRECTORY=${METRICS_DIRECTORY:-/usr/local/lib/cosmoz-rest-wrapper/metrics}
 METRICS_UPLOADKEY=${METRICS_UPLOADKEY:-nokey}
-METRICS_UPLOADENDPOINT="${METRICS_UPLOADENDPOINT:-http://lw-94-cdc.it.csiro.au:3001/api/upload}"
+METRICS_UPLOADENDPOINT="${METRICS_UPLOADENDPOINT:-http://lw-78-cdc.it.csiro.au:3001/api/upload}"
 
 . "$SCRIPTS_ENV_FILE"
 

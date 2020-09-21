@@ -14,3 +14,6 @@ mgdb/
 nmdb/
 res/debug.log
 metrics/
+email_downloader_res/*
+cosmoz_influx_backup/
+cosmoz_mongo_backup/
