@@ -7,7 +7,7 @@ RUN apk add --no-cache --update --virtual buildenv git libuv-dev libffi-dev free
 RUN ln -s /usr/bin/python3 /usr/bin/python
 RUN patchelf --add-needed libgcompat.so.0 /usr/bin/python3.6
 RUN pip3 install --upgrade "pip>=19.0.2"
-RUN pip3 install --upgrade cython "setuptools>=40.8" "poetry>=1.0.3"
+RUN pip3 install --upgrade cython "setuptools>=40.8" "poetry>=1.0.10"
 RUN echo 'manylinux1_compatible = True' > /usr/lib/python3.6/_manylinux.py &&\
     pip3 install "orjson==2.5.2" &&\
     rm /usr/lib/python3.6/_manylinux.py
