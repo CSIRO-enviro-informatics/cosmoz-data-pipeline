@@ -14,6 +14,9 @@ RUN echo 'manylinux1_compatible = True' > /usr/lib/python3.6/_manylinux.py &&\
 WORKDIR /usr/local/lib
 ARG COSMOZ_REST_WRAPPER_VER
 RUN git clone https://github.com/CSIRO-enviro-informatics/cosmoz-rest-wrapper.git
+
+# Adding pipeline code to allow processing of the data
+# TODO: Possibly move to own container for better separation of concerns? Unless there is a relationship between these code bases
 ARG COSMOZ_DATA_PIPELINE_VER
 RUN git clone https://github.com/CSIRO-enviro-informatics/cosmoz-data-pipeline.git
 WORKDIR /usr/local/lib/cosmoz-data-pipeline
@@ -22,6 +25,8 @@ RUN source ./.venv/bin/activate &&\
     poetry run pip3 install --upgrade cython &&\
     poetry install -v --no-root &&\
     deactivate
+
+# Adding API codebase which is the expected entrypoint of this container.
 WORKDIR /usr/local/lib/cosmoz-rest-wrapper
 RUN python3 -m virtualenv -p /usr/bin/python3 --system-site-packages .venv
 RUN source ./.venv/bin/activate &&\

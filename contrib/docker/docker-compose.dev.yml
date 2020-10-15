@@ -1,0 +1,30 @@
+version: "3.6"
+services:
+  cosmoz.influxdb:
+    ports:
+      - "8186:8086"
+      # - "8188:8088"
+
+  cosmoz.mongodb:
+    ports:
+      - "27018:27017"
+
+  cosmoz.email.downloader:
+    volumes:
+      - "${PWD}/../../email_downloader.env:/root/src/.env"
+    labels:
+      ofelia.enabled: "false"
+
+  cosmoz.pipeline.application:
+    # dont use gunicorn
+    command: sh -c "source ./.venv/bin/activate && cd src && python app.py"
+    ports:
+      - "8098:8098"
+    volumes:
+      #map rest repo in for dev
+      - "${PWD}/../../../cosmoz-rest-wrapper/src/:/usr/local/lib/cosmoz-rest-wrapper/src/"
+      #map in config files
+      - "${PWD}/config/cosmoz_rest_wrapper.dev.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env"
+      - "${PWD}/config/config-vars.dev.env:/usr/local/lib/cosmoz-data-pipeline/.env"
+    labels:
+      ofelia.enabled: "false"
