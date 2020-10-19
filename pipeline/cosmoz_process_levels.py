@@ -662,8 +662,8 @@ def main():
         all_sites = mdb.all_sites
         all_stations_docs = mdb.all_stations
         if siteno is not None:
-            siteno = int(siteno)
-            all_stations = all_stations_docs.find({'site_no': siteno}, {'site_no': 1})
+            sitenos = [int(s.strip()) for s in siteno.split(',') if s]
+            all_stations = all_stations_docs.find({'site_no': {"$in": sitenos}}, {'site_no': 1})
         else:
             all_stations = all_stations_docs.find({}, {'site_no': 1})
         mongo_client.close()
@@ -674,7 +674,7 @@ def main():
             return
         elif len(all_stations) < 2:
             printout("Only doing station {}".format(siteno))
-            process_levels(siteno, worker_options)
+            process_levels(all_stations[0]['site_no'], worker_options)
             end_time = datetime.now().astimezone(timezone.utc)
             printout("Finished process_levels for site {} at {}".format(siteno, end_time))
             printout("process_levels took {}".format((end_time - start_time)))
