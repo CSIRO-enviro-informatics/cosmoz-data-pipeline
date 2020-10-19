@@ -56,6 +56,17 @@ def get_site_no_from_imei(imei, at_date=None, mongo_client=None):
     return site_no
 
 
+def get_all_site_no(mongo_client=None):
+    if mongo_client is None:
+        mongo_client = make_mongo_client()
+    mdb = getattr(mongo_client, mongodb_config['DB_NAME'])
+    all_stations = mdb.all_stations
+    found_sites = all_stations.find()
+    all_sites = []
+    for f in found_sites:
+        all_sites.append(f['site_no'])
+    return all_sites
+
 def get_nmdb_from_site_no(site_no, mongo_client=None):
     if mongo_client is None:
         mongo_client = make_mongo_client()

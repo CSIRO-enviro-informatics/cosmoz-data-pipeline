@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 #
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
-
 from .intensity import Intensity
 from .mongo_db import get_nmdb_from_site_no
 class DataGetter(object):
@@ -122,6 +121,122 @@ class DataGetter(object):
         intensity = Intensity(self.site_no, self.timestamp, float(line.split(b";")[1]))
         cache[cache_key] = intensity
         return intensity
+
+    # /**
+    #  * Using a dynamically generated URL, this method queries the
+    #  * NEST webpage for the intensity values. This data is then
+    #  * read in as a String and 'taken apart' to find the actual
+    #  * intensities.<br>
+    #  *
+    #  * @return
+    #  *         A new <code>List[Intensity]</code> object containing the
+    #  * retrieved intensity or <code>null</code> if there was no
+    #  * data returned
+    #  */
+    def get_intensities_from_nmdb(self, startdate, enddate):
+        """
+
+        :param startdate:
+        :param enddate:
+        :return:
+        :rtyle: list[Intensity]
+        """
+        if self.nmdb is None:
+            return None
+
+        new_startdate = datetime(startdate.year, startdate.month,
+                                 startdate.day, startdate.hour,
+                                 0, 0, 0, tzinfo=startdate.tzinfo)
+        new_enddate = datetime(enddate.year, enddate.month,
+                               enddate.day, enddate.hour,
+                               0, 0, 0, tzinfo=enddate.tzinfo)
+        negative_hour = timedelta(hours=-1)
+        two_hours = timedelta(hours=2)
+
+        new_startdate = new_startdate + negative_hour  # type: datetime
+        startYear = str(new_startdate.year)
+        startMonth = str(new_startdate.month)
+        startDay = str(new_startdate.day)
+        startHour = str(new_startdate.hour)
+        startMin = "00"
+
+        new_enddate = new_enddate + two_hours  # type: datetime
+        endYear = str(new_enddate.year)
+        endMonth = str(new_enddate.month)
+        endDay = str(new_enddate.day)
+        endHour = str(new_enddate.hour)
+        endMin = "59"
+
+        url_address = "http://nmdb.eu/nest/draw_graph.php?formchk=1&stations%5B%5D=" + str(self.nmdb)\
+            + "&last_days=1&last_label=days_label&date_choice=bydate&start_day=" + startDay \
+            + "&start_month=" + startMonth + "&start_year=" + startYear + "&start_hour=" + startHour \
+            + "&start_min=" + startMin + "&end_day=" + endDay + "&end_month=" + endMonth \
+            + "&end_year=" + endYear + "&end_hour=" + endHour + "&end_min=" + endMin \
+            + "&tresolution=60&output=ascii&tabchoice=revori&dtype=corr_for_efficiency&yunits=0"
+        intensities = []
+        try:
+            if self.debug_writer:
+                self.debug_writer.write("\n===== Data for SiteNo " + str(self.site_no) + " =====\n")
+            resp = self.session.get(url_address)
+            resp_bytes = resp.content
+            resp_lines = resp_bytes.splitlines()
+            line_iter = iter(resp_lines)
+            line = next(line_iter)
+            while b"RCORR_E" not in line or b"DATA TYPE" in line:
+                try:
+                    line = next(line_iter)
+                except StopIteration as s:
+                    if self.debug_writer:
+                        self.debug_writer.write("No value for NMDB {} at {}".format(self.nmdb, str(self.timestamp)))
+                    return None
+            line = next(line_iter)  # skip the 1h ago line
+            line = next(line_iter)  # get this line
+            while b';' in line:
+                try:
+                    parts = line.split(b';')
+                    this_time = datetime.strptime(parts[0].decode('latin-1'), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                    val = float(parts[1])
+                    intensity = Intensity(self.site_no, this_time, val)
+                    intensities.append(intensity)
+                except IndexError:
+                    break
+                except BaseException as e:
+                    print(e)
+                    break
+                try:
+                    line = next(line_iter)  # get the next line
+                except StopIteration:
+                    break
+
+
+            # String line = reader.readLine();
+            # try {
+            #     while(!(line.contains("RCORR_E") && (line.contains("start_date_time")))) {
+            #         line = reader.readLine();
+            #     }
+            # } catch (NullPointerException npe) {
+            #     try {
+            #         writer.write("No value for " + getTimestampAsString() + "!\n");
+            #     } catch (IOException e) {}
+            #     return null;
+            # }
+            # line = reader.readLine(); // Don't want this!
+            # line = reader.readLine(); // Do want this!
+            # reader.close();
+            # writer.write("NMDB Row: " + line + "\n");
+            #
+            # return new Intensity(siteNo, timestamp, Float.parseFloat(line.split(";")[1].trim()), 0);
+        except Exception as e:
+
+            # try {
+            #     writer.write("Exception with URL or reading data!\n");
+            #     writer.write("Cause: " + e.getMessage() + "\n");
+            #     writer.write("Stack Trace:\n");
+            #     for (int i = 0; i < e.getStackTrace().length; i++)
+            #         writer.write(e.getStackTrace()[i].toString() + "\n");
+            # } catch (IOException e1) {}
+            return None
+        return intensities
 
 
     #

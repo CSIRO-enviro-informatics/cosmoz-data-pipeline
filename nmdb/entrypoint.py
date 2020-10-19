@@ -8,6 +8,7 @@ import traceback
 from datetime import datetime, timezone, timedelta
 
 from .data_getter import DataGetter
+from .mongo_db import get_all_site_no
 from .influx_db import get_intensity_timestamp, store_intensity_data, \
     get_previous_valid_intensity_row
 from .config import SITE_NUMBERS_TO_GET_DATA_FOR, SITE_NUMBERS_TO_IGNORE_DATA_FOR, MAXIMUM_LOOKBACK_TIME_DIFF, DEBUG_FILE
@@ -67,7 +68,10 @@ class Main(object):
     @classmethod
     def retrieve_intensity_values(cls):
         hour_offset = timedelta(hours=1)
-        for site_no in SITE_NUMBERS_TO_GET_DATA_FOR:
+        all_site_no = get_all_site_no()
+        for site_no in all_site_no:
+            if site_no in SITE_NUMBERS_TO_IGNORE_DATA_FOR:
+                continue
             database_timestamp = get_intensity_timestamp(site_no)  # type: datetime
             if database_timestamp is None:
                 continue
@@ -95,6 +99,21 @@ class Main(object):
                 db_time_millis = database_timestamp.timestamp() * 1000.0
 
     @classmethod
+    def rebuild_intensity_values_for_site(cls, site_no, start_date=None):
+        if start_date is None:
+            start_date = get_intensity_timestamp(site_no)  # type: datetime
+        current_timestamp = datetime.now().astimezone(timezone.utc)
+        current_timestamp = current_timestamp.replace(minute=0, second=0, microsecond=0)
+        data_getter = DataGetter(site_no, start_date)
+        # While databaseTimestamp < currentTimestamp
+        intensities = data_getter.get_intensities_from_nmdb(start_date, current_timestamp)
+        for intensity in intensities:
+            if not cls.is_valid_intensity(intensity):
+                intensity.set_bad_data_flag(1)
+            store_intensity_data([intensity])
+        return
+
+    @classmethod
     def is_valid_intensity(cls, intensity):
         #        boolean isValid = true;
         is_valid = True
@@ -111,6 +130,9 @@ class Main(object):
 def main():
     main = Main()
     main.main()
+    #main.rebuild_intensity_values_for_site(22)
+    #for site in SITE_NUMBERS_TO_GET_DATA_FOR:
+    #    main.rebuild_intensity_values_for_site(site)
 
 if __name__ == "__main__":
     main()

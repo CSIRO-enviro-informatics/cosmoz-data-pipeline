@@ -153,7 +153,7 @@ def get_intensity_timestamp(site_no, influx_client=None):
     :param site_no: The siteNo in the Intensity table to check for
     :param influx_client:
     :return: The last valid Intensity timestamp for this site
-    :rtype: datetime
+    :rtype: datetime.datetime
     """
     timestamp = _get_max_intensity_timestamp(site_no, influx_client)
     if timestamp is None:
