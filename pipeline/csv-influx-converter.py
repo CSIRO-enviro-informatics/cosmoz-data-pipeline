@@ -16,15 +16,81 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import csv
+from datetime import time as d_time, datetime, timezone, timedelta
 from influxdb import InfluxDBClient
-from .influx_cached_writer import AccumCacheInfluxWriter
-from ._influx_db_config import config as influx_config
-from .utils import sql_to_isostring
+try:
+    from .influx_cached_writer import AccumCacheInfluxWriter
+except ImportError:
+    from influx_cached_writer import AccumCacheInfluxWriter
+try:
+    from ._influx_db_config import config as influx_config
+except ImportError:
+    from _influx_db_config import config as influx_config
+try:
+    from .utils import sql_to_isostring, datetime_to_isostring
+except ImportError:
+    from utils import sql_to_isostring, datetime_to_isostring
+
 
 influx_client = InfluxDBClient(
     influx_config['DB_HOST'], int(influx_config['DB_PORT']),
     influx_config['DB_USERNAME'], influx_config['DB_PASSWORD'],
     influx_config['DB_NAME'], timeout=30)
+
+def look_intensities(at_site, startdate):
+    to_site = int(at_site)
+    enddate = datetime.utcnow().replace(tzinfo=timezone.utc)
+    startdate_iso = datetime_to_isostring(datetime.combine(startdate.date(), d_time(startdate.hour, 0, 0, 0, tzinfo=startdate.tzinfo)))
+    enddate_iso = datetime_to_isostring(datetime.combine(enddate.date(), d_time(enddate.hour, 0, 0, 0, tzinfo=enddate.tzinfo)))
+    intensity_req = influx_client.query(
+        """SELECT * FROM "intensity" WHERE "time" >= '{}' AND "time" <= '{}' AND site_no='{}'""".format(
+            startdate_iso, enddate_iso, at_site))
+
+    intensities = intensity_req.get_points()
+    for i, intensity in enumerate(intensities):
+        print("{}:{}".format(i, intensity), flush=True)
+
+def copy_intensities(from_site, to_site, startdate, enddate=None):
+    from_site = int(from_site)
+    to_site = int(to_site)
+    if enddate is None:
+        enddate = datetime.utcnow().replace(tzinfo=timezone.utc)
+    startdate_iso = datetime_to_isostring(datetime.combine(startdate.date(), d_time(startdate.hour, 0, 0, 0, tzinfo=startdate.tzinfo)))
+    enddate_iso = datetime_to_isostring(datetime.combine(enddate.date(), d_time(enddate.hour, 0, 0, 0, tzinfo=enddate.tzinfo)))
+    intensity_req = influx_client.query(
+        """SELECT * FROM "intensity" WHERE "time" >= '{}' AND "time" <= '{}' AND site_no='{}'""".format(
+            startdate_iso, enddate_iso, from_site))
+
+    intensities = intensity_req.get_points()
+
+    with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
+        while True:
+            try:
+                row = next(intensities)
+            except (IndexError, StopIteration):
+                break
+            print(row)
+            prev_site = row['site_no']
+            iso_timestamp = row['time']
+            bad_data = int(row['bad_data_flag'])
+            try:
+                intensity = float(row['intensity'])
+            except ValueError:
+                intensity = 0.0
+                bad_data = 1
+            json_body = {
+                "measurement": "intensity",
+                "tags": {
+                    "site_no": to_site,
+                    "bad_data_flag": bad_data,
+                },
+                "time": iso_timestamp,  # "2009-11-10T23:00:00Z",
+                "fields": {
+                    "intensity": intensity
+                }
+            }
+            writer.write_point(json_body)
+            del row
 
 def intensities():
     with open("./intensity.csv", "r", encoding="utf-8") as f:
@@ -309,8 +375,12 @@ def raw_vals():
 
 if __name__ == "__main__":
     influx_client.create_database(influx_config['DB_NAME'])
-    silo_data()
-    intensities()
+    now = datetime.utcnow().replace(tzinfo=timezone.utc)
+    ago = now - timedelta(days=60)
+    #look_intensities(22, ago)
+    copy_intensities(22, 23, ago)
+    #silo_data()
+    #intensities()
     # raw_vals()
     # level2()
     # level1()

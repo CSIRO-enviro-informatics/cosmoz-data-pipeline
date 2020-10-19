@@ -2,7 +2,10 @@
 #
 import sys
 from os import getenv
-from .utils import do_load_dotenv
+try:
+    from .utils import do_load_dotenv
+except ImportError:
+    from utils import do_load_dotenv
 
 do_load_dotenv()
 
