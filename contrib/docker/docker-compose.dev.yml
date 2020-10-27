@@ -17,12 +17,14 @@ services:
 
   cosmoz.pipeline.application:
     # dont use gunicorn
-    command: sh -c "source ./.venv/bin/activate && cd src && python app.py"
+    command: sh -c "source ./.venv/bin/activate && cd src && poetry install && python app.py"
     ports:
       - "8098:8098"
     volumes:
       #map rest repo in for dev
       - "${PWD}/../../../cosmoz-rest-wrapper/src/:/usr/local/lib/cosmoz-rest-wrapper/src/"
+      - "${PWD}/../../../cosmoz-rest-wrapper/pyproject.toml:/usr/local/lib/cosmoz-rest-wrapper/pyproject.toml"
+      - "${PWD}/../../../cosmoz-rest-wrapper/poetry.lock:/usr/local/lib/cosmoz-rest-wrapper/poetry.lock"
       #map in config files
       - "${PWD}/config/cosmoz_rest_wrapper.dev.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env"
       - "${PWD}/config/config-vars.dev.env:/usr/local/lib/cosmoz-data-pipeline/.env"
