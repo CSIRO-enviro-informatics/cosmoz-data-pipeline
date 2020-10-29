@@ -17,3 +17,9 @@ metrics/
 email_downloader_res/*
 cosmoz_influx_backup/
 cosmoz_mongo_backup/
+
+app_scripts.env
+
+cosmoz_rest_wrapper.env
+
+email_downloader.env
