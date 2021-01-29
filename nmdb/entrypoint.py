@@ -102,15 +102,21 @@ class Main(object):
     def rebuild_intensity_values_for_site(cls, site_no, start_date=None):
         if start_date is None:
             start_date = get_intensity_timestamp(site_no)  # type: datetime
+
+        if start_date is None:
+            # Still none?! Default to 2010?
+            start_date = datetime(2010, 1, 1, hour=0)
+        print("Rebuilding NMDB intensities for site {} from date {}".format(site_no, start_date))
         current_timestamp = datetime.now().astimezone(timezone.utc)
         current_timestamp = current_timestamp.replace(minute=0, second=0, microsecond=0)
         data_getter = DataGetter(site_no, start_date)
         # While databaseTimestamp < currentTimestamp
         intensities = data_getter.get_intensities_from_nmdb(start_date, current_timestamp)
-        for intensity in intensities:
-            if not cls.is_valid_intensity(intensity):
-                intensity.set_bad_data_flag(1)
-            store_intensity_data([intensity])
+        if intensities:
+            for intensity in intensities:
+                if not cls.is_valid_intensity(intensity):
+                    intensity.set_bad_data_flag(1)
+                store_intensity_data([intensity])
         return
 
     @classmethod
@@ -131,8 +137,8 @@ def main():
     main = Main()
     main.main()
     #main.rebuild_intensity_values_for_site(22)
-    #for site in SITE_NUMBERS_TO_GET_DATA_FOR:
-    #    main.rebuild_intensity_values_for_site(site)
+    # for site in SITE_NUMBERS_TO_GET_DATA_FOR:
+    #     main.rebuild_intensity_values_for_site(site)
 
 if __name__ == "__main__":
     main()

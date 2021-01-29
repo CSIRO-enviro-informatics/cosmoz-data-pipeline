@@ -100,6 +100,7 @@ def all_stations():
                     raise er
             del accum_cache
 
+# This doesn't work anymore, because http://cosmoz.csiro.au/sensor-information/?SiteNo was from the old site, no longer used
 def stations_calibration():
     db = getattr(client, mongodb_config['DB_NAME'])
     all_stations_collection = db.all_stations
@@ -193,6 +194,60 @@ def stations_calibration():
         if to_add:
             cal_collection.insert_many(to_add)
 
+def station_calibration(site_no, csv_file):
+    db = getattr(client, mongodb_config['DB_NAME'])
+    all_stations_collection = db.all_stations
+    cal_txt_collection = db.stations_calibration_txt
+    cal_collection = db.stations_calibration
+    res = all_stations_collection.find({"site_no": site_no})
+    sites = []
+    for i in res:
+        _ = i['site_no']
+        sites.append(i)
+    if len(sites) < 1:
+        raise RuntimeError("Cannot find site {} to add calibrations to.".format(site_no))
+    with open(csv_file, "r") as f:
+        lines = iter(f.readlines())
+        h1 = next(lines)
+        headers = ["date", "label", "loc", "depth", "vol", "total_wet", "total_dry", "tare", "soil_wet", "soil_dry", "gwc", "bd", "vwc"]
+        to_add = []
+        try:
+            line = next(lines)
+        except:
+            line = None
+        while line:
+            parts = line.split(",")
+            parts = list(filter(None,[p.strip(" \n\r\t") for p in parts]))
+            try:
+                assert len(parts) == len(headers)
+                tagged_parts = {headers[i]: p for i, p in enumerate(parts)}
+                try:
+                    d = datetime.datetime.strptime(tagged_parts['date'], "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)
+                except ValueError:
+                    d = datetime.datetime.strptime(tagged_parts['date'], "%d/%m/%Y").replace(tzinfo=datetime.timezone.utc)
+                tagged_parts['date'] = d
+                for kl in ("total_wet", "total_dry", "tare", "soil_wet", "soil_dry", "gwc", "bd", "vwc"):
+                    part = tagged_parts[kl]
+                    tagged_parts[kl] = Decimal128('NaN') if (part == "" or part == "NULL") else Decimal128(part)
+                tagged_parts['site_no'] = site_no
+                to_add.append(tagged_parts)
+            except Exception as e:
+                print(e)
+                print(line)
+                continue
+            finally:
+                try:
+                    line = next(lines)
+                except:
+                    line = None
+        if to_add:
+            cal_collection.insert_many(to_add)
+
+def main():
+    # all_stations()
+    # stations_calibration()
+    # station_calibration(22, "ScottsPeak_CalibrationData.csv")
+    station_calibration(23, "BrigalowC3_CalibrationData.csv")
+
 if __name__ == "__main__":
-    all_stations()
-    stations_calibration()
+    main()
