@@ -22,6 +22,7 @@ import math
 from datetime import time as d_time, datetime, timedelta, timezone
 from influxdb import InfluxDBClient
 from pymongo import MongoClient
+from sortedcontainers import SortedList
 
 from .influx_cached_writer import AccumCacheInfluxWriter
 from .utils import datetime_to_isostring, isostring_to_datetime
@@ -167,7 +168,7 @@ WHERE "time" > '{}' AND site_no='{}'""".format(time_string, site_no))
             writer.write_point(json_body)
 
 
-def level1_to_level2(mongo_client, site_no=1, start_time=None, backprocess=None):
+def level1_to_level2(mongo_client, site_no=1, start_time=None, backprocess=None, drop_old=False):
     emulate_old_version = False
     if start_time is None:
         start_time = datetime.now().astimezone(timezone.utc)
@@ -181,9 +182,10 @@ def level1_to_level2(mongo_client, site_no=1, start_time=None, backprocess=None)
     result = influx_client.query("""\
 SELECT "time", site_no, "count", pressure1, pressure2, external_temperature, external_humidity, rain, flag as level1_flag
 FROM "level1"
-WHERE "time" > '{}' AND site_no='{}'""".format(time_string, site_no))
+WHERE "time" > '{}' AND site_no=$s""".format(time_string), bind_params={"s": str(site_no)})
     points = result.get_points()
-    #influx_client.query("DROP SERIES FROM level2_temp WHERE site_no='{}';".format(site_no), method='POST')
+    if drop_old:
+        influx_client.query("DROP SERIES FROM level2 WHERE site_no=$s;", bind_params={"s": str(site_no)}, method='POST')
     with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
         for p in points:
             count = p['count']
@@ -311,24 +313,54 @@ WHERE "time" > '{}' AND site_no='{}'""".format(time_string, site_no))
             }
             writer.write_point(json_body)
 
+def is_duplicate(site_no, record1, record2, table):
+    if isinstance(record2, datetime):
+        record2 = datetime_to_isostring(record2)
+    if isinstance(record2, str):
+        result = influx_client.query("""\
+        SELECT "time", site_no, "count", pressure1, internal_temperature, internal_humidity, battery, tube_temperature, tube_humidity, rain, vwc1, vwc2, vwc3, pressure2, external_temperature, external_humidity, flag as raw_flag
+        FROM "{}"
+        WHERE "time" = '{}' AND site_no=$s;""".format(table, record2), bind_params={"s": str(site_no)})
+        points = result.get_points()
+        try:
+            record2 = next(iter(points))
+        except (IndexError, StopIteration):
+            return False
+    different = {}
+    for key, val in record1.items():
+        if key in ("time", "site_no", "flag"):
+            continue
+        if key in record2:
+            val2 = record2[key]
+            if val != val2:
+                different[key] = (val, val2)
+    return len(different) < 1
 
-def raw_to_level1(site_no=1, start_time=None, backprocess=None):
+
+def raw_to_level1(site_no=1, start_time=None, backprocess=None, drop_old=False):
     if start_time is None:
         start_time = datetime.now().astimezone(timezone.utc)
     if backprocess is None:
         backprocess = TEN_YEARS
     back_time = start_time - backprocess
     time_string = datetime_to_isostring(back_time)
+    a_res = influx_client.query("""SELECT "time", "count", site_no FROM "raw_values" WHERE site_no=$s""", bind_params={"s": str(site_no)})
+    all_mapped = {}
+    for p in a_res.get_points():
+        all_mapped[isostring_to_datetime(p["time"])] = p
+    all_times = SortedList(all_mapped.keys())
     result = influx_client.query("""\
 SELECT "time", site_no, "count", pressure1, internal_temperature, internal_humidity, battery, tube_temperature, tube_humidity, rain, vwc1, vwc2, vwc3, pressure2, external_temperature, external_humidity, flag as raw_flag
 FROM "raw_values"
-WHERE "time" > '{}' AND site_no='{}';""".format(time_string, site_no))
+WHERE "time" > '{}' AND site_no=$s;""".format(time_string), bind_params={"s": str(site_no)})
     points = result.get_points()
     result2 = influx_client.query("""\
 SELECT DIFFERENCE("count") as count_diff
 FROM "raw_values"
-WHERE "time" > '{}' AND site_no='{}';""".format(time_string, site_no))
+WHERE "time" > '{}' AND site_no=$s""".format(time_string), bind_params={"s": str(site_no)})
     points2 = result2.get_points()
+    if drop_old:
+        influx_client.query("DROP SERIES FROM level1 WHERE site_no=$s;", bind_params={"s":str(site_no)}, method='POST')
     with AccumCacheInfluxWriter(influx_client, cache_length=10) as writer:
         try:
             #skip the first p, because it doesn't have a corresponding diff
@@ -337,8 +369,26 @@ WHERE "time" > '{}' AND site_no='{}';""".format(time_string, site_no))
             return
         #influx_client.query("DROP SERIES FROM level1_temp WHERE site_no='{}';".format(site_no), method='POST')
         for p in points:
-            bat = p['battery']
+            time_str = p['time']
+            at_time = isostring_to_datetime(time_str)
             count = p['count']
+            dup_back_time = at_time - timedelta(minutes=29.0)
+            possible_duplicates_times = list(all_times.irange(dup_back_time, at_time, inclusive=(True, False)))
+            if len(possible_duplicates_times) > 0:
+                for dt in possible_duplicates_times:
+                    dc = all_mapped[dt]['count']
+                    dtstring = all_mapped[dt]['time']
+                    if dc == count:
+                        im_duplicate = is_duplicate(site_no, p, dtstring, 'raw_values')
+                        if im_duplicate:
+                            break
+                else:
+                    im_duplicate = False
+                if im_duplicate:
+                    print("Skipping time {} at site {} because it is a duplicate.".format(time_str, site_no))
+                    _ = next(points2)
+                    continue
+            bat = p['battery']
             p2 = next(points2)
             count_diff = p2['count_diff']
             prev_count = count+(count_diff * -1.0)
@@ -358,7 +408,7 @@ WHERE "time" > '{}' AND site_no='{}';""".format(time_string, site_no))
                     "site_no": p['site_no'],
                     "flag": int(flag),
                 },
-                "time": p['time'],
+                "time": time_str,
                 "fields": {
                     "count": int(p['count']),
                     "pressure1": float(p['pressure1']),
@@ -574,6 +624,7 @@ def process_levels(site_no, options={}):
     start_time = options.get('start_time', None)
     backprocess = options.get('backprocess', None)
     do_tests = options.get('do_tests', False)
+    drop_old = options.get('drop_old', False)
     mongo_client2 = MongoClient(mongodb_config['DB_HOST'], int(mongodb_config['DB_PORT']))  # 27017
     p_start_time = datetime.now().astimezone(timezone.utc)
     if start_time is None:
@@ -582,16 +633,19 @@ def process_levels(site_no, options={}):
     if do_tests:
         print("Doing site {} with sanity tests turned on. This takes longer.".format(site_no))
     #fix_raws(site_no=site_no)
-    raw_to_level1(site_no=site_no, start_time=start_time, backprocess=backprocess)
+    raw_to_level1(site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=drop_old)
+    print("Finished raw->level1 for site {}, starting level1->level2.".format(site_no))
     if do_tests:
         assert test1(site_no=site_no, start_time=start_time)
-    level1_to_level2(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess)
+    level1_to_level2(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=drop_old)
+    print("Finished level1->level2 for site {}, starting level2->level3.".format(site_no))
     if do_tests:
         assert test2(site_no=site_no, start_time=start_time)
-    level2_to_level3(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=False)
+    level2_to_level3(mongo_client2, site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=drop_old)
+    print("Finished level2->level3 for site {}, starting level3->level4.".format(site_no))
     if do_tests:
         assert test3(site_no=site_no, start_time=start_time)
-    level3_to_level4(site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=False)
+    level3_to_level4(site_no=site_no, start_time=start_time, backprocess=backprocess, drop_old=drop_old)
     if do_tests:
         assert test4(site_no=site_no, start_time=start_time)
     p_end_time = datetime.now().astimezone(timezone.utc)
@@ -628,6 +682,8 @@ def main():
                         help='Pick just one site number')
     parser.add_argument('-d', '--process-days', type=str, dest="processdays",
                         help='Number of days to backprocess. Default is 365 days.')
+    parser.add_argument('-xx', '--dropold', dest="drop_old", action="store_true",
+                        help='Drop old contents of table before processing its contents. USE WITH CAUTION!')
     parser.add_argument('-t', '--from-datetime', type=str, dest="fromdatetime",
                         help='The earliest datetime to backprocess to. In isoformat. Default is all of history.\nNote cannot use -d and -t together.')
     parser.add_argument('-o', '--output', dest='output', nargs='?', type=argparse.FileType('w'),
@@ -640,6 +696,7 @@ def main():
     try:
         processdays = args.processdays
         fromdatetime = args.fromdatetime
+        drop_old = args.drop_old
         siteno = args.siteno
         if processdays is not None and fromdatetime is not None:
             raise RuntimeError("Cannot use -d and -t at the same time. Pick one.")
@@ -667,7 +724,7 @@ def main():
         else:
             all_stations = all_stations_docs.find({}, {'site_no': 1})
         mongo_client.close()
-        worker_options = {'start_time': start_time, 'do_tests': False, 'backprocess': backprocess}
+        worker_options = {'start_time': start_time, 'do_tests': False, 'backprocess': backprocess, 'drop_old': drop_old}
         all_stations = list(all_stations) #This turns a the mongo cursor into a python list
         if len(all_stations) < 1:
             printout("No stations to process.")

@@ -5,10 +5,10 @@ PYTHONUNBUFFERED=1
 export PYTHONUNBUFFERED
 
 #Uncomment these to process to soils-discovery rather than in the container.
-#export INFLUX_DB_HOST=soils-discovery.it.csiro.au
-#export INFLUX_DB_PORT=8186
-#export MONGO_DB_HOST=soils-discovery.it.csiro.au
-#export MONGO_DB_PORT=27018
+export INFLUX_DB_HOST=soils-discovery.it.csiro.au
+export INFLUX_DB_PORT=8186
+export MONGO_DB_HOST=soils-discovery.it.csiro.au
+export MONGO_DB_PORT=27018
 
 #This directory and this log file need to be present in order to run
 mkdir -p "./res"
