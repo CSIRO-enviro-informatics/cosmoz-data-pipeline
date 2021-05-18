@@ -4,11 +4,9 @@ version: "3.6"
 services:
 
   cosmoz.pipeline.application:
-    image: docker-registry.it.csiro.au/tern-landscapes/cosmoz-pipeline-application:v001
+    image: docker.io/ternau/landscapes.cosmoz.pipeline:latest
     build:
       dockerfile: "${PWD}/Dockerfiles/pipeline.Dockerfile"
       context: ../../
-      network: host
-    hostname: "cosmoz.pipeline.application"
     environment:
       - PYTHONUNBUFFERED=TRUE

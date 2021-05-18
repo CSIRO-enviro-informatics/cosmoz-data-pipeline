@@ -124,7 +124,7 @@ services:
       ofelia.job-exec.emails-cloud-ingest.command: "sh -c 'source ./.venv/bin/activate && python3 main.py C -d 1'"
 
   cosmoz.pipeline.application:
-    image: docker-registry.it.csiro.au/tern-landscapes/cosmoz-pipeline-application:v001
+    image: docker.io/ternau/landscapes.cosmoz.pipeline:latest
     hostname: "cosmoz.pipeline.application"
     environment:
       - PYTHONUNBUFFERED=TRUE

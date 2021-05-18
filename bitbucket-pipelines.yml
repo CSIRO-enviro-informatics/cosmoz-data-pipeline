@@ -1,0 +1,52 @@
+image:
+  name: atlassian/default-image:2
+
+options:
+  docker: true
+
+definitions:
+  # generic re-usable steps
+  steps:
+    - step: # use a multiline step to set environment variables
+        script: &setenv |
+          export IMAGE_NAME=docker.io/ternau/landscapes.cosmoz.pipeline
+          git fetch origin
+          export IMAGE_TAG=$(git describe --tags)
+
+    - step:
+        script: &docker-compose |
+          curl -L "https://github.com/docker/compose/releases/download/v1.25.2/docker-compose-$(uname -s)-$(uname -m)" -o $HOME/docker-compose
+          chmod +x $HOME/docker-compose
+
+    - step: &build-test-step
+        script:
+          - *setenv
+          - *docker-compose
+          # build latest
+          - cd contrib/docker
+          - $HOME/docker-compose -f docker-compose.build.yml build --build-arg CLONE_ORIGIN=$BITBUCKET_GIT_HTTP_ORIGIN --build-arg CLONE_COMMIT=$BITBUCKET_COMMIT --build-arg CLONE_BRANCH=$BITBUCKET_BRANCH
+          - cd ../..
+
+pipelines:
+  branches:
+    develop:
+      - step: *build-test-step
+    master:
+      - step: *build-test-step
+    publish:
+      - step:
+          script:
+            - *setenv
+            - *docker-compose
+            - cd contrib/docker
+            - docker-compose -f docker-compose.build.yml build --build-arg CLONE_ORIGIN=$BITBUCKET_GIT_HTTP_ORIGIN --build-arg CLONE_COMMIT=$BITBUCKET_COMMIT --build-arg CLONE_BRANCH=$BITBUCKET_BRANCH
+            - docker tag $IMAGE_NAME $IMAGE_NAME:$IMAGE_TAG
+            - docker tag $IMAGE_NAME $IMAGE_NAME:latest
+            - docker login --username $DOCKER_USERNAME --password $DOCKER_PASSWORD
+            - docker push $IMAGE_NAME
+            - docker push $IMAGE_NAME:$IMAGE_TAG
+            - docker push $IMAGE_NAME:latest
+
+  pull-requests:
+    "**":
+      - step: *build-test-step
