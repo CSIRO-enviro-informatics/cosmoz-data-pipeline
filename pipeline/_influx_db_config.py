@@ -14,8 +14,8 @@ defaults = module.defaults = {
     "DB_HOST": "timeseriesdb",
     "DB_PORT": 8086,
     "DB_NAME": "cosmoz",
-    "DB_USERNAME": "root",
-    "DB_PASSWORD": "root",
+    "DB_USERNAME": "username",
+    "DB_PASSWORD": "password",
 }
 config = module.config = dict()
 
