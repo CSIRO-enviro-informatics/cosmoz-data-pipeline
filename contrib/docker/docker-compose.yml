@@ -89,7 +89,7 @@ services:
     volumes:
       - "/etc/localtime:/etc/localtime:ro"
       - "/etc/timezone:/etc/timezone:ro"
-      - "documentdb-backup:/dump"
+      - "documentdb-backup:/dump",
     depends_on:
       - cosmoz.mongodb
     environment:
@@ -132,9 +132,6 @@ services:
       - MONGODB_PORT=27017
       - INFLUXDB_HOST=cosmoz.influxdb
       - INFLUXDB_PORT=8086
-      - REST_API_LISTEN_HOST=0.0.0.0
-      - METRICS_DIRECTORY=/usr/local/lib/cosmoz-rest-wrapper/metrics
-      - SANIC_PROXIES_COUNT=1
     depends_on:
       - cosmoz.influxdb
       - cosmoz.mongodb
